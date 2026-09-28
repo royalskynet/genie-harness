@@ -1,0 +1,49 @@
+{
+  "_comment": "Tiny Semantic Router 的分類定義。keywords = 零成本正規表達式快路徑；examples = 算 embedding 質心用。threshold 以下一律視為 clear_request（寧可直接做，不多問）。",
+  "threshold": 0.40,
+  "default": "clear_request",
+  "intents": {
+    "user_confused": {
+      "keywords": ["看不懂", "不懂", "聽不懂", "什麼意思", "太難", "不太明白", "不明白", "confus", "don'?t (get|understand)", "what does (that|this) mean", "\\bhuh\\b", "簡單一點", "白話"],
+      "examples": [
+        "我看不懂", "這是什麼意思", "太難了可以講簡單一點嗎", "你剛剛說的我不太明白", "可以用白話再講一次嗎",
+        "I don't understand", "what does that mean?", "I'm confused", "can you explain that more simply", "huh?"
+      ]
+    },
+    "risky_action": {
+      "keywords": ["rm -rf", "刪(掉|除)(全部|所有|整個)", "全部刪", "清空", "重灌", "格式化", "force.?push", "drop (table|database)", "reset --hard", "sudo", "付款", "付費", "刷卡", "chmod 777", "覆蓋", "wipe", "delete (all|everything)", "nuke"],
+      "examples": [
+        "把整個資料夾刪掉重來", "幫我清空資料庫", "直接 force push 上去", "把電腦重灌", "全部覆蓋掉不用備份",
+        "delete everything and start over", "drop the production database", "force push to main", "wipe the disk", "run it with sudo and delete all"
+      ]
+    },
+    "research_needed": {
+      "keywords": ["哪個(比較)?好", "推薦", "選哪", "要用哪", "最新版", "現在(流行|主流)", "比較一下", "which (one )?(is|should)", "recommend", "best (library|framework|tool|way)", "latest version", "vs\\.?\\s", "還是", "大家都用", "都用什麼", "good for", "still maintained"],
+      "examples": [
+        "做網站要用 React 還是 Vue", "現在最新的 Node 版本是多少", "推薦一個免費的資料庫", "哪個套件比較好用", "比較一下這三個工具",
+        "which framework should I use for a small blog", "what's the latest version of Python", "recommend a free hosting service", "is library X still maintained", "React vs Svelte for beginners"
+      ]
+    },
+    "execute_request": {
+      "keywords": ["幫我(跑|執行|安裝|部署|啟動)", "跑起來", "裝起來", "執行看看", "run (it|this|the)", "install", "deploy", "start the", "npm (run|start|install)", "pip install", "docker", "build (it|this)"],
+      "examples": [
+        "幫我把專案跑起來", "把這個套件裝起來", "執行測試看看", "幫我部署到 GitHub Pages", "啟動伺服器",
+        "run the tests", "install the dependencies and start it", "deploy this to Vercel", "build the project", "start the dev server"
+      ]
+    },
+    "ambiguous_request": {
+      "keywords": ["^(幫我)?(做|弄|搞|用)一?(個|下)?(東西|網站|app|程式|工具)$", "隨便", "都可以", "你看著辦", "有沒有辦法", "怎麼樣才能", "something (like|that)", "some kind of", "can you (make|do) something"],
+      "examples": [
+        "幫我做一個網站", "我想弄個 app", "幫我寫個程式", "做個東西可以自動幫我整理檔案", "有沒有辦法讓它變快",
+        "make me an app", "build something that tracks my expenses", "I want a website", "can you make this better", "help me with my project"
+      ]
+    },
+    "clear_request": {
+      "keywords": [],
+      "examples": [
+        "把 index.html 的標題改成『我的部落格』", "在 README 加一段安裝說明", "把按鈕顏色從藍色改成綠色", "這個函式加上錯誤處理，找不到檔案時印出提示", "把 config.json 裡的 port 改成 8080",
+        "rename the variable count to total in app.js", "add a dark mode toggle button to the header", "fix the typo in the README title", "change the font size of h1 to 24px", "add a test for the parse_date function"
+      ]
+    }
+  }
+}

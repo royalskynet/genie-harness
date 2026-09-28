@@ -6,7 +6,7 @@
 ```
 你打字  →  Tiny Semantic Router (0.07s, 58 MB RAM)  →  Codex  →  白話短句的回答
                  │
-                 └─ 只貼一個標籤：[genie] intent=ambiguous_request
+                 └─ 只貼一個標籤：genie: intent=ambiguous_request
                     AGENTS.md 看標籤決定：直接做／只問一題／先查官方文件／講簡單一點／一次一步／先警告
 ```
 

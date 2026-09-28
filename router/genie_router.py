@@ -2,7 +2,7 @@
 """Tiny Semantic Router for Genie Harness.
 
 Codex `UserPromptSubmit` hook. Reads the hook JSON on stdin, prints ONE line
-of developer context: `[genie] intent=<label>`. AGENTS.md decides what to do
+of developer context: `genie: intent=<label>`. AGENTS.md decides what to do
 with the label, so Codex never spends reasoning on intent detection.
 
 Two tiers, cheapest first:
@@ -138,7 +138,7 @@ def main():
     intent, score, why = classify(text)
     if os.environ.get("GENIE_DEBUG"):
         sys.stderr.write("genie: %s score=%.2f via=%s\n" % (intent, score, why))
-    print("[genie] intent=%s" % intent)
+    print("genie: intent=%s" % intent)
 
 
 if __name__ == "__main__":

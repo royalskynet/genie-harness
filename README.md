@@ -36,17 +36,31 @@ Six intent labels:
 git clone https://github.com/royalskynet/genie-harness ~/genie-harness && bash ~/genie-harness/install.sh
 ```
 
-Requirements: Codex CLI (hooks are stable), Python 3.9+, numpy. First run downloads ~512 MB of model data; after processing, ~35 MB on disk (58 MB RSS at runtime).
+Requirements: Codex CLI (hooks are stable), Python 3.9+, numpy. First run downloads ~512 MB of model data; after processing, ~35 MB on disk (58 MB RSS at runtime). If pip reports `externally-managed-environment` for Homebrew Python, install numpy in the user site with `python3 -m pip install --user --break-system-packages numpy`.
 
-**What install.sh touches (all idempotent, all backed up first as `*.bak-genie`):**
+**What install.sh touches (re-runs preserve the first `*.bak-genie` backup):**
 
 | Touch point | Change | Restore |
 |---|---|---|
-| `~/.agents/skills/genie-*` | 4 symlinks to this repo's `skills/` | `rm ~/.agents/skills/genie-*` |
-| `~/.codex/hooks.json` | one `UserPromptSubmit` entry added (existing hooks kept) | `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json` |
+| `~/.agents/skills/genie-*` | 4 symlinks to this repo's `skills/`; existing same-name paths are moved to `.bak-genie` | Remove the four Genie symlinks listed below; restore any matching backup |
+| `~/.codex/hooks.json` | one `UserPromptSubmit` entry added or refreshed; other hooks are kept | `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json` |
+| `~/.codex/config.toml` | the matching hook `trusted_hash` is added or refreshed | `mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml` |
 | `~/.codex/AGENTS.md` | this repo's AGENTS.md appended once, marker-guarded | `mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md` |
 
-Every original file is copied to `<file>.bak-genie` before it is touched, so reverting is just renaming those backups back.
+An existing backup is never overwritten. If a same-name skill already has a `.bak-genie` path, installation stops before replacing any skill link; review or move that backup before retrying.
+
+Remove the installed Genie skill links, then restore any paths the installer backed up:
+
+```bash
+for name in genie-execute genie-explain genie-humanizer genie-research; do
+  link="$HOME/.agents/skills/$name"
+  backup="$link.bak-genie"
+  if [ -L "$link" ] && [[ "$(readlink "$link")" == */genie-harness/skills/"$name" ]]; then rm "$link"; fi
+  if { [ -e "$backup" ] || [ -L "$backup" ]; } && [ ! -e "$link" ] && [ ! -L "$link" ]; then mv "$backup" "$link"; fi
+done
+```
+
+On a repeated install, the installer refreshes the hook and symlinks if the repository moved, while preserving the first backups.
 
 ### Layout
 
@@ -129,17 +143,31 @@ Router 用一個極小的靜態 embedding 模型在本地 0.07 秒分好類，Co
 git clone https://github.com/royalskynet/genie-harness ~/genie-harness && bash ~/genie-harness/install.sh
 ```
 
-需要：Codex CLI（hooks 已是 stable）、Python 3.9+、numpy。第一次會下載 ~512 MB 模型，處理後只留 ~35 MB（執行期 RSS 58 MB）。
+需要：Codex CLI（hooks 已是 stable）、Python 3.9+、numpy。第一次會下載 ~512 MB 模型，處理後只留 ~35 MB（執行期 RSS 58 MB）。若 Homebrew Python 的 pip 顯示 `externally-managed-environment`，可用 `python3 -m pip install --user --break-system-packages numpy` 把 numpy 裝到使用者套件目錄。
 
-**install.sh 會動三處（全程冪等，動前都備份成 `*.bak-genie`）：**
+**install.sh 會動四處（重跑時保留第一次建立的 `*.bak-genie` 備份）：**
 
 | 動什麼 | 改法 | 如何復原 |
 |---|---|---|
-| `~/.agents/skills/genie-*` | 4 個 symlink 指回本 repo 的 `skills/` | `rm ~/.agents/skills/genie-*` |
-| `~/.codex/hooks.json` | 加一條 `UserPromptSubmit`（原 hooks 保留） | `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json` |
+| `~/.agents/skills/genie-*` | 4 個 symlink 指回本 repo 的 `skills/`；同名舊路徑先移到 `.bak-genie` | 移除下方列出的四個 Genie symlink，再還原同名備份 |
+| `~/.codex/hooks.json` | 新增或更新 `UserPromptSubmit`；保留其他 hooks | `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json` |
+| `~/.codex/config.toml` | 新增或更新 hook 對應的 `trusted_hash` | `mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml` |
 | `~/.codex/AGENTS.md` | 尾端加上本專案的 AGENTS.md（一次，marker 防重複） | `mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md` |
 
-任何改動前都會先把原檔複製成 `<file>.bak-genie`，復原就是把備份檔改回去。
+既有備份不會被覆蓋。若同名技能的 `.bak-genie` 已存在，安裝器會在替換任何技能連結前停止；請先檢查或移走該備份再重試。
+
+移除已安裝的 Genie 技能連結，並還原安裝器備份的舊路徑：
+
+```bash
+for name in genie-execute genie-explain genie-humanizer genie-research; do
+  link="$HOME/.agents/skills/$name"
+  backup="$link.bak-genie"
+  if [ -L "$link" ] && [[ "$(readlink "$link")" == */genie-harness/skills/"$name" ]]; then rm "$link"; fi
+  if { [ -e "$backup" ] || [ -L "$backup" ]; } && [ ! -e "$link" ] && [ ! -L "$link" ]; then mv "$backup" "$link"; fi
+done
+```
+
+重新執行安裝器時，若倉庫搬了位置，它會更新 hook 與技能連結，同時保留第一次的備份。
 
 ### 目錄
 

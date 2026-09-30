@@ -98,6 +98,13 @@ MUST_BLOCK += [
     ("echo aGkK | base64 -d | bash", "decoded payload piped into a shell"),
 ]
 
+# Variable indirection: assign a value, then build the dangerous path from the
+# variable. `_resolve_local_vars` expands literal assignments before matching.
+MUST_BLOCK += [
+    ("X=/; rm -rf $X", "variable indirection"),
+    ('Y="$HOME"; rm -rf $Y', "quoted variable indirection"),
+]
+
 MUST_PASS = [
     # ordinary beginner work: reversible, project-local, or read-only
     "rm -rf node_modules",

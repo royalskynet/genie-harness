@@ -89,61 +89,101 @@ python3 - "$HERE" "$CODEX" <<'EOF'
 import hashlib, json, os, re, shlex, shutil, sys
 here, codex = sys.argv[1], sys.argv[2]
 path, cfg = os.path.join(codex, "hooks.json"), os.path.join(codex, "config.toml")
-cmd = "%s %s" % (shlex.quote(sys.executable), shlex.quote(os.path.join(here, "router", "genie_router.py")))
-timeout = 5
-hook = {"type": "command", "command": cmd, "timeout": timeout}
+PY = shlex.quote(sys.executable)
+def _cmd(script):
+    return "%s %s" % (PY, shlex.quote(os.path.join(here, "router", script)))
+HOOKS = [
+    ("UserPromptSubmit", None, "genie_router.py", 5),
+    ("UserPromptSubmit", None, "prefs_hook.py", 5),
+    ("PreToolUse", "Bash|Write|Edit|apply_patch|MultiEdit", "guard_dangerous.py", 5),
+]
 data = {"hooks": {}}
-original = None
 already_installed = False
+changed = False
 if os.path.exists(path):
     with open(path, encoding="utf-8") as f:
-        original = json.load(f)
-    data = original
-lst = data.setdefault("hooks", {}).setdefault("UserPromptSubmit", [])
-idx = next((i for i, e in enumerate(lst) if any("genie_router.py" in h.get("command", "") for h in e.get("hooks", []))), None)
-already_installed = idx is not None
-changed = False
-hook_idx = 0
-if idx is None:
-    lst.append({"hooks": [hook]})
-    idx = len(lst) - 1
-    changed = True
-else:
-    hooks = lst[idx].setdefault("hooks", [])
-    hook_idx = next(i for i, h in enumerate(hooks) if "genie_router.py" in h.get("command", ""))
-    if hooks[hook_idx] != hook:
-        hooks[hook_idx] = hook
-        changed = True
+        data = json.load(f)
+# One registration entry per event, several hooks objects inside it (Codex
+# hooks.json schema). Match entries/hooks by script filename, not by the last
+# token of the quoted command (which breaks when the checkout path has spaces).
+for _event in ("UserPromptSubmit", "PreToolUse"):
+    _ev_hooks = [h for h in HOOKS if h[0] == _event]
+    _scripts = [h[2] for h in _ev_hooks]
+    _lst = data.setdefault("hooks", {}).setdefault(_event, [])
+    _idx = next((i for i, e in enumerate(_lst)
+                 if any(any(_s in hh.get("command", "") for _s in _scripts)
+                        for hh in e.get("hooks", []))), None)
+    if _idx is None:
+        _entry = {"hooks": []}
+        if _ev_hooks[0][1]:
+            _entry["matcher"] = _ev_hooks[0][1]
+        _lst.append(_entry)
+        _idx = len(_lst) - 1
+    else:
+        already_installed = True
+    for _m, _s, _t in [(h[1], h[2], h[3]) for h in _ev_hooks]:
+        _c = _cmd(_s)
+        _hooks = _lst[_idx].setdefault("hooks", [])
+        _hidx = next((i for i, hh in enumerate(_hooks) if _s in hh.get("command", "")), None)
+        if _hidx is None:
+            _hooks.append({"type": "command", "command": _c, "timeout": _t})
+            changed = True
+            print("  added %s -> %s" % (_event, _s))
+        elif _hooks[_hidx]["command"] != _c:
+            _hooks[_hidx] = {"type": "command", "command": _c, "timeout": _t}
+            changed = True
+            print("  updated %s -> %s" % (_event, _s))
+        else:
+            print("  already present: %s" % _s)
 
 def backup_once(filename):
     backup = filename + ".bak-genie"
     if os.path.lexists(filename) and not os.path.lexists(backup):
         shutil.copy2(filename, backup, follow_symlinks=False)
 
-ident = {"event_name": "user_prompt_submit", "hooks": [{"type": "command", "command": cmd, "timeout": timeout, "async": False}]}
-matcher = lst[idx].get("matcher")
-if matcher is not None:
-    ident["matcher"] = matcher
-digest = "sha256:" + hashlib.sha256(json.dumps(ident, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-key = '[hooks.state.%s]' % json.dumps("%s:user_prompt_submit:%d:%d" % (path, idx, hook_idx))
+# trust entries for every hook we manage; identities must match Codex's
+# hook_hash (see codex-rs hooks/src/engine/discovery.rs).
+_sections = []
+for _event, _matcher, _script, _timeout in HOOKS:
+    _key = "UserPromptSubmit" if _event == "UserPromptSubmit" else "PreToolUse"
+    _tkey = "user_prompt_submit" if _event == "UserPromptSubmit" else "pre_tool_use"
+    _lst = data["hooks"][_key]
+    _idx = next((i for i, e in enumerate(_lst)
+                 if any(_script in h.get("command", "") for h in e.get("hooks", []))), None)
+    if _idx is None:
+        continue
+    _hooks = _lst[_idx]["hooks"]
+    _hidx = next(i for i, h in enumerate(_hooks) if _script in h.get("command", ""))
+    ident = {"event_name": _tkey,
+             "hooks": [{"type": "command", "command": _hooks[_hidx]["command"],
+                        "timeout": _timeout, "async": False}]}
+    _m = _lst[_idx].get("matcher")
+    if _m is not None:
+        ident["matcher"] = _m
+    digest = "sha256:" + hashlib.sha256(
+        json.dumps(ident, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    _sections.append(('[hooks.state.%s]' % json.dumps(
+        "%s:%s:%d:%d" % (path, _tkey, _idx, _hidx)), digest))
 old = open(cfg, encoding="utf-8").read() if os.path.exists(cfg) else ""
-lines = old.splitlines()
-new_lines = list(lines)
-try:
-    start = next(i for i, line in enumerate(lines) if line.strip() == key)
-except StopIteration:
-    new_lines.extend([""] if new_lines and new_lines[-1].strip() else [])
-    new_lines.extend([key, 'trusted_hash = "%s"' % digest])
-else:
-    end = next((i for i in range(start + 1, len(lines))
-                if lines[i].lstrip().startswith("[") and lines[i].rstrip().endswith("]")), len(lines))
-    hash_line = next((i for i in range(start + 1, end)
-                      if re.match(r"^\s*trusted_hash\s*=", lines[i])), None)
-    if hash_line is None:
-        new_lines.insert(end, 'trusted_hash = "%s"' % digest)
-    elif re.fullmatch(r'\s*trusted_hash\s*=\s*"%s"\s*' % re.escape(digest), lines[hash_line]) is None:
-        indent = re.match(r"^\s*", lines[hash_line]).group(0)
-        new_lines[hash_line] = indent + 'trusted_hash = "%s"' % digest
+new_lines = list(old.splitlines())
+for key, digest in _sections:
+    try:
+        start = next(i for i, line in enumerate(new_lines) if line.strip() == key)
+    except StopIteration:
+        new_lines.extend([""] if new_lines and new_lines[-1].strip() else [])
+        new_lines.extend([key, 'trusted_hash = "%s"' % digest])
+    else:
+        end = next((i for i in range(start + 1, len(new_lines))
+                    if new_lines[i].lstrip().startswith("[")
+                    and new_lines[i].rstrip().endswith("]")), len(new_lines))
+        hash_line = next((i for i in range(start + 1, end)
+                          if re.match(r"^\s*trusted_hash\s*=", new_lines[i])), None)
+        if hash_line is None:
+            new_lines.insert(end, 'trusted_hash = "%s"' % digest)
+        elif re.fullmatch(r'\s*trusted_hash\s*=\s*"%s"\s*' % re.escape(digest),
+                          new_lines[hash_line]) is None:
+            indent = re.match(r"^\s*", new_lines[hash_line]).group(0)
+            new_lines[hash_line] = indent + 'trusted_hash = "%s"' % digest
 new = "\n".join(new_lines) + ("\n" if old.endswith("\n") or new_lines else "")
 hook_text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 hook_changed = changed and hook_text != (open(path, encoding="utf-8").read() if os.path.exists(path) else "")
@@ -176,5 +216,29 @@ if ! grep -qF "$MARK" "$A" 2>/dev/null; then
   echo "AGENTS.md appended -> $A"
 else
   echo "AGENTS.md already present"
+fi
+# --- smoke tests (A4/E3) ---
+PY="$(command -v python3)"
+_GUARD="$("$PY" -c 'import os,sys; print(os.path.join(sys.argv[1],"router","guard_dangerous.py"))' "$HERE")"
+_ROUTER="$("$PY" -c 'import os,sys; print(os.path.join(sys.argv[1],"router","genie_router.py"))' "$HERE")"
+_PREFS="$("$PY" -c 'import os,sys; print(os.path.join(sys.argv[1],"router","prefs_hook.py"))' "$HERE")"
+if [ -f "$_GUARD" ]; then
+  echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' | "$PY" "$_GUARD" \
+    | grep -q '"permissionDecision": "deny"' \
+    && echo "guard smoke test: PASS" \
+    || { echo "guard smoke test: FAILED"; exit 1; }
+fi
+if [ -f "$_ROUTER" ]; then
+  echo '{"prompt":"幫我把專案跑起來"}' | "$PY" "$_ROUTER" \
+    | grep -q "genie: intent=" \
+    && echo "router smoke test: PASS" \
+    || { echo "router smoke test: FAILED"; exit 1; }
+fi
+if [ -f "$_PREFS" ]; then
+  echo '{"prompt":"什麼是 hook"}' \
+    | GENIE_PREFS="$(mktemp -d)/prefs.json" "$PY" "$_PREFS" \
+    | grep -q "terms\[on\]" \
+    && echo "prefs smoke test: PASS" \
+    || { echo "prefs smoke test: FAILED"; exit 1; }
 fi
 echo "done. try:  codex 'React 還是 Vue 比較好'"

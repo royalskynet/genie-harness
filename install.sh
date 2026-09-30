@@ -3,9 +3,10 @@
 #   1. numpy present?            (only runtime dep)
 #   2. router model              (one-time ~512 MB download -> ~35 MB on disk)
 #   3. skills  -> ~/.agents/skills/genie-*   (symlinks)
-#   4. hook    -> ~/.codex/hooks.json        (merged, existing hooks kept)
-#   5. AGENTS.md -> ~/.codex/AGENTS.md       (appended once, marker-guarded)
+#   4. hooks   -> ~/.codex/hooks.json        (merged, existing hooks kept)
+#   5. AGENTS.md -> ~/.codex/AGENTS.md      (appended once, marker-guarded)
 #   6. hook trust -> ~/.codex/config.toml
+#   7. smoke    -> guard must deny, router must classify, prefs must inject (A4/E3)
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODEX="${CODEX_HOME:-$HOME/.codex}"
@@ -89,9 +90,12 @@ python3 - "$HERE" "$CODEX" <<'EOF'
 import hashlib, json, os, re, shlex, shutil, sys
 here, codex = sys.argv[1], sys.argv[2]
 path, cfg = os.path.join(codex, "hooks.json"), os.path.join(codex, "config.toml")
-cmd = "%s %s" % (shlex.quote(sys.executable), shlex.quote(os.path.join(here, "router", "genie_router.py")))
-timeout = 5
-hook = {"type": "command", "command": cmd, "timeout": timeout}
+HOOKS = [
+    ("user_prompt_submit", None, "python3 %s/router/genie_router.py" % here, 5),
+    ("user_prompt_submit", None, "python3 %s/router/prefs_hook.py" % here, 5),
+    ("pre_tool_use", "Bash|Write|Edit|apply_patch|MultiEdit",
+     "python3 %s/router/guard_dangerous.py" % here, 5),
+]
 data = {"hooks": {}}
 original = None
 already_installed = False
@@ -99,33 +103,47 @@ if os.path.exists(path):
     with open(path, encoding="utf-8") as f:
         original = json.load(f)
     data = original
-lst = data.setdefault("hooks", {}).setdefault("UserPromptSubmit", [])
-idx = next((i for i, e in enumerate(lst) if any("genie_router.py" in h.get("command", "") for h in e.get("hooks", []))), None)
-already_installed = idx is not None
+already_installed = False
 changed = False
-hook_idx = 0
-if idx is None:
-    lst.append({"hooks": [hook]})
-    idx = len(lst) - 1
-    changed = True
-else:
-    hooks = lst[idx].setdefault("hooks", [])
-    hook_idx = next(i for i, h in enumerate(hooks) if "genie_router.py" in h.get("command", ""))
-    if hooks[hook_idx] != hook:
-        hooks[hook_idx] = hook
+for event, matcher, cmd, timeout in HOOKS:
+    key = "UserPromptSubmit" if event == "user_prompt_submit" else "PreToolUse"
+    entry = {"hooks": [{"type": "command", "command": cmd, "timeout": timeout}]}
+    if matcher:
+        entry["matcher"] = matcher
+    lst = data.setdefault("hooks", {}).setdefault(key, [])
+    idx = next((i for i, e in enumerate(lst)
+                if any(h.get("command", "") == cmd for h in e.get("hooks", []))), None)
+    if idx is None:
+        lst.append(entry)
         changed = True
+        print("  added %s -> %s" % (key, os.path.basename(cmd.split()[-1])))
+    else:
+        if lst[idx] != entry:
+            lst[idx] = entry
+            changed = True
+            print("  updated %s -> %s" % (key, os.path.basename(cmd.split()[-1])))
+        else:
+            print("  already present: %s" % os.path.basename(cmd.split()[-1]))
 
 def backup_once(filename):
     backup = filename + ".bak-genie"
     if os.path.lexists(filename) and not os.path.lexists(backup):
         shutil.copy2(filename, backup, follow_symlinks=False)
 
-ident = {"event_name": "user_prompt_submit", "hooks": [{"type": "command", "command": cmd, "timeout": timeout, "async": False}]}
-matcher = lst[idx].get("matcher")
-if matcher is not None:
-    ident["matcher"] = matcher
-digest = "sha256:" + hashlib.sha256(json.dumps(ident, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-key = '[hooks.state.%s]' % json.dumps("%s:user_prompt_submit:%d:%d" % (path, idx, hook_idx))
+for event, matcher, cmd, timeout in HOOKS:
+    key_name = "UserPromptSubmit" if event == "user_prompt_submit" else "PreToolUse"
+    lst = data["hooks"][key_name]
+    idx = next((i for i, e in enumerate(lst)
+                if any(h.get("command", "") == cmd for h in e.get("hooks", []))), None)
+    if idx is None:
+        continue
+    ident = {"event_name": event, "hooks": [
+        {"type": "command", "command": cmd, "timeout": timeout, "async": False}]}
+    if matcher:
+        ident["matcher"] = matcher
+    digest = "sha256:" + hashlib.sha256(
+        json.dumps(ident, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    key = '[hooks.state.%s]' % json.dumps("%s:%s:%d:0" % (path, key_name.lower(), idx))
 old = open(cfg, encoding="utf-8").read() if os.path.exists(cfg) else ""
 lines = old.splitlines()
 new_lines = list(lines)
@@ -177,4 +195,26 @@ if ! grep -qF "$MARK" "$A" 2>/dev/null; then
 else
   echo "AGENTS.md already present"
 fi
+# --- smoke tests (A4/E3) ---------------------------------------------------
+# A hook that silently does nothing is worse than no hook: the user believes
+# they are protected. So prove all three hooks actually work before declaring done.
+
+echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' \
+  | python3 "$HERE/router/guard_dangerous.py" \
+  | grep -q '"permissionDecision": "deny"' \
+  && echo "guard smoke test: PASS (rm -rf / denied)" \
+  || { echo "guard smoke test: FAILED -- the gate did not deny a catastrophic command"; exit 1; }
+
+echo '{"prompt":"幫我把專案跑起來"}' \
+  | python3 "$HERE/router/genie_router.py" \
+  | grep -q "genie: intent=" \
+  && echo "router smoke test: PASS" \
+  || { echo "router smoke test: FAILED -- the router did not emit an intent"; exit 1; }
+
+echo '{"prompt":"什麼是 hook"}' \
+  | GENIE_PREFS="$(mktemp -d)/prefs.json" python3 "$HERE/router/prefs_hook.py" \
+  | grep -q "terms\[on\]" \
+  && echo "prefs smoke test: PASS (asking forces terms on)" \
+  || { echo "prefs smoke test: FAILED"; exit 1; }
+
 echo "done. try:  codex 'React 還是 Vue 比較好'"

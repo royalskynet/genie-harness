@@ -45,11 +45,12 @@ class InstallerTest(unittest.TestCase):
         for name in SKILLS:
             (repo / "skills" / name).mkdir()
         shutil.copy2(ROOT / "install.sh", repo / "install.sh")
+        shutil.copy2(ROOT / "update.sh", repo / "update.sh")
         shutil.copy2(ROOT / "AGENTS.md", repo / "AGENTS.md")
         (repo / "router" / "model" / "vocab.json").touch()
         return repo
 
-    def run_install(self, repo, home, codex, *, no_numpy=False):
+    def run_install(self, repo, home, codex, *, no_numpy=False, script="install.sh"):
         env = os.environ.copy()
         env.update({
             "HOME": str(home),
@@ -62,7 +63,7 @@ class InstallerTest(unittest.TestCase):
         else:
             env.pop("GENIE_TEST_NO_NUMPY", None)
         return subprocess.run(
-            ["bash", str(repo / "install.sh")],
+            ["bash", str(repo / script)],
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -208,6 +209,31 @@ class InstallerTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("backup already exists", result.stdout)
         self.assertEqual(hooks.read_bytes(), original_hooks)
+
+    def test_update_pulls_then_reruns_install_in_update_mode(self):
+        origin = self.make_repo(self.root / "origin")
+        home, codex = self.root / "home", self.root / "codex"
+        home.mkdir()
+        codex.mkdir()
+        git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
+        subprocess.run([*git, "init", "-q", str(origin)], check=True)
+        subprocess.run([*git, "-C", str(origin), "add", "-A"], check=True)
+        subprocess.run([*git, "-C", str(origin), "commit", "-qm", "v1"], check=True)
+        clone = self.root / "clone" / "genie-harness"
+        subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True)
+
+        first = self.run_install(clone, home, codex)
+        self.assertEqual(first.returncode, 0, first.stdout)
+        self.assertIn("fresh install", first.stdout)
+
+        (origin / "NEW").write_text("v2", encoding="utf-8")
+        subprocess.run([*git, "-C", str(origin), "add", "-A"], check=True)
+        subprocess.run([*git, "-C", str(origin), "commit", "-qm", "v2"], check=True)
+
+        second = self.run_install(clone, home, codex, script="update.sh")
+        self.assertEqual(second.returncode, 0, second.stdout)
+        self.assertTrue((clone / "NEW").exists(), "update.sh did not pull")
+        self.assertIn("update mode", second.stdout)
 
 
 if __name__ == "__main__":

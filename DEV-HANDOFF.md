@@ -58,31 +58,19 @@
 
 ## 未完成 / 阻塞
 
-### install.sh 多 hook 合併邏輯（唯一阻塞）
-- **問題**：`tests/test_install.py` 的 `test_reinstall_preserves_backups_and_refreshes_moved_hook` 期望 `UserPromptSubmit` 只有一個 registration entry，但當前 install.sh 在「repo 移動後第二次安裝」時會產生 2 個 entry
-- **已失敗的三種寫法**（不要重複）：
-  1. 逐 hook 建立 entry → 2 個 entry
-  2. 按 event 分組（UserPromptSubmit 一組、PreToolUse 一組）→ 還是 2 個
-  3. 修正搜尋變數名 → 還是 2 個
-- **正確方向**：先讀 Codex 官方 hooks 文件（`gh` 查 `openai/codex` repo 的 hooks 相關 source/docs），確認「多個 hook 如何放進同一個 registration entry」的結構
-- **關鍵約束**：
-  - `tests/test_install.py` 不可修改
-  - `backup_once`、`already_installed`、trust hash 邏輯不可破壞
-  - 不可引入新的 Python 依賴
-- **驗收**：`python3 tests/test_install.py` → `Ran 4 tests` + `OK`
+無。install.sh 多 hook 合併邏輯已在 `b007db4`（fix: single UserPromptSubmit registration per event, match hooks by script name）修好，`tests/test_install.py` 全數 4 項 PASS（含 `test_reinstall_preserves_backups_and_refreshes_moved_hook`）。此節先前脫敏時未同步跑驗收，內容已過時，2026-09-30 重跑確認全綠後更新。
 
 ## 下一步
 
-1. 修好 install.sh 多 hook 合併（見上）
-2. 跑全部測試確認沒改壞：
+1. 全部測試已確認 PASS：
    ```bash
-   python3 router/test_guard.py
-   python3 router/test_prefs.py
-   python3 router/test_repo.py
-   GENIE_MODEL_DIR=<model_path> python3 router/test_router.py
-   python3 tests/test_install.py
+   python3 router/test_guard.py                                          # PASS
+   python3 router/test_prefs.py                                          # PASS
+   python3 router/test_repo.py                                           # PASS
+   GENIE_MODEL_DIR=<model_path> python3 router/test_router.py            # strict 97% / safe 100%
+   python3 tests/test_install.py                                         # Ran 4 tests, OK
    ```
-3. commit + push + 建立 PR
+2. 建立 PR 到 `main`
 
 ## 關鍵檔案
 

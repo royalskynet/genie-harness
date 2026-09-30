@@ -30,10 +30,13 @@ no reliable way to tell a project checkout from personal data, and inventing a
 fuzzy heuristic would block real work. Codex's own sandbox mode and approval
 policy are the boundary here; this complements them, it does not replace them.
 
-Known gap, not on purpose (no fix, tracked here so it stays visible): variable
-indirection, e.g. `X=/; rm -rf $X`. This is a regex gate, not a shell parser,
-so it cannot resolve an arbitrary variable to its value before matching. Only
-the literal, hardcoded forms (`$HOME`, `${HOME}`, `~`) are recognized.
+Known gap, narrowed but not closed: variable indirection. `_resolve_local_vars`
+expands literal `NAME=VALUE` assignments (command start or after `;`/`&&`/
+newline, optional `export`) before matching, so `X=/; rm -rf $X` is caught.
+It is still not a shell parser: pipes, subshells and arithmetic are untouched,
+expanded text is never re-expanded, and a name assigned two different values is
+left alone. The literal, hardcoded forms (`$HOME`, `${HOME}`, `~`) are still
+recognized directly.
 
 Failure policy: fail OPEN. Any internal error allows the call, because a guard
 that breaks your terminal is worse than one that misses a phrase.
@@ -268,6 +271,44 @@ def _clean_path(s):
     return " ".join(toks)
 
 
+# Literal `NAME=VALUE` assignments: command start, or after `;`/`&&`/newline,
+# optional `export` prefix. This exists so `X=/; rm -rf $X` is seen as what it
+# is. Not a shell parser: pipes, subshells and arithmetic are untouched.
+ASSIGN_RE = re.compile(
+    r"(?:^|[;&\n])\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(\"[^\"]*\"|'[^']*'|[^\s;&|]+)"
+)
+
+
+def _resolve_local_vars(cmd):
+    """Expand literal `NAME=VALUE` assignments so `$NAME` can be matched.
+
+    Only assignments at the command start or after `;`/`&&`/newline count, the
+    value is taken literally (quotes stripped), and only `$NAME`/`${NAME}`
+    occurrences *after* the assignment are replaced. A name assigned two
+    different values is left alone -- guessing which one the shell would use is
+    how false denies happen.
+    """
+    found = []
+    values = {}
+    for m in ASSIGN_RE.finditer(cmd):
+        name, raw = m.group(1), m.group(2)
+        if raw[0] == raw[-1] and raw[0] in "\"'":
+            raw = raw[1:-1]
+        found.append((name, raw, m.end()))
+        values.setdefault(name, set()).add(raw)
+    ambiguous = {n for n, vs in values.items() if len(vs) > 1}
+    out = cmd
+    # Backward order: each replacement only rewrites text at or after its own
+    # assignment, so earlier assignments' positions stay valid.
+    for name, value, end in sorted(found, key=lambda a: -a[2]):
+        if name in ambiguous:
+            continue
+        tail = re.sub(r"\$\{%s\}|\$%s\b" % (re.escape(name), re.escape(name)),
+                      lambda _: value, out[end:])
+        out = out[:end] + tail
+    return out
+
+
 BASH_DENY_C = [(n, re.compile(p, re.IGNORECASE), r) for n, p, r in BASH_DENY]
 TARGET_DENY_C = [(n, re.compile(p, re.IGNORECASE), pred, r) for n, p, pred, r in TARGET_DENY]
 TARGET_WARN_C = [(n, re.compile(p, re.IGNORECASE), r) for n, p, r in TARGET_WARN]
@@ -281,6 +322,7 @@ def inspect_command(cmd, _depth=0):
         return []
     hits = []
     stripped = "\n".join(l.split("#", 1)[0] for l in cmd.splitlines())
+    stripped = _resolve_local_vars(stripped)
 
     # Indirect execution (`sh -c "..."`, `eval "..."`, `python -c "..."`) hides
     # its payload inside quotes that the prose-safe blanking below is designed

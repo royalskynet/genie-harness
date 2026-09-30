@@ -87,6 +87,17 @@ MUST_BLOCK += [
     ("rm -rf --no-preserve-root /", "no-preserve-root"),
 ]
 
+# Indirect execution: `sh -c "..."` / `eval "..."` run a string as code, so its
+# payload has to be inspected too -- otherwise quoting a command is a free pass.
+MUST_BLOCK += [
+    ('bash -c "rm -rf /"', "wrapped rm via bash -c"),
+    ('sh -c "rm -rf ~"', "wrapped rm via sh -c"),
+    ("eval \"rm -rf /\"", "wrapped rm via eval"),
+    ('rm -rf "$HOME"', "quoted $HOME still resolves as home"),
+    ('rm -rf "~"', "quoted ~ still resolves as home"),
+    ("echo aGkK | base64 -d | bash", "decoded payload piped into a shell"),
+]
+
 MUST_PASS = [
     # ordinary beginner work: reversible, project-local, or read-only
     "rm -rf node_modules",

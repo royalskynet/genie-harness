@@ -7,6 +7,23 @@
             "type": "command",
             "command": "python3 __GENIE_DIR__/router/genie_router.py",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "python3 __GENIE_DIR__/router/prefs_hook.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|apply_patch|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 __GENIE_DIR__/router/guard_dangerous.py",
+            "timeout": 5
           }
         ]
       }

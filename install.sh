@@ -12,6 +12,12 @@ CODEX="${CODEX_HOME:-$HOME/.codex}"
 SKILLS="$HOME/.agents/skills"
 MARK="<!-- genie-harness -->"
 
+if grep -qsF genie_router.py "$CODEX/hooks.json"; then
+  echo "genie-harness already installed -> refreshing (update mode)"
+else
+  echo "genie-harness not installed yet -> fresh install"
+fi
+
 if ! python3 -c "import numpy" 2>/dev/null; then
   echo "numpy is required by the router." >&2
   echo "Install it for this Python with: python3 -m pip install --user numpy" >&2

@@ -54,7 +54,7 @@ Six independent blocks, each `on` / `auto` (only when needed) / `off`. `auto` is
 ### Quick Start (one-line install)
 
 ```bash
-git clone https://github.com/royalskynet/genie-harness ~/genie-harness && bash ~/genie-harness/install.sh
+d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else git clone https://github.com/royalskynet/genie-harness "$d"; fi && bash "$d/install.sh"
 ```
 
 Requirements: Codex CLI (hooks are stable), Python 3.9+, numpy. First run downloads ~512 MB of model data; after processing, ~35 MB on disk (58 MB RSS at runtime). If pip reports `externally-managed-environment` for Homebrew Python, install numpy in the user site with `python3 -m pip install --user --break-system-packages numpy`.
@@ -83,6 +83,12 @@ done
 
 On a repeated install, the installer refreshes the hook and symlinks if the repository moved, while preserving the first backups.
 
+The one-liner is safe to re-run: if `~/genie-harness` is already a clone it pulls instead of cloning, then re-runs install.sh. Already installed and only want the update:
+
+```bash
+bash ~/genie-harness/update.sh
+```
+
 install.sh also runs three smoke tests before declaring done: the guard must deny `rm -rf /`, the router must emit an intent, and the prefs hook must force `terms` on when the user asks what something is. A hook that silently does nothing is worse than no hook.
 
 ### Layout
@@ -109,6 +115,8 @@ skills/
   genie-terms/             one term, plain language, a concrete analogy
 hooks.json                 hook template
 install.sh
+update.sh                  git pull --ff-only 後重跑 install.sh
+update.sh                  git pull --ff-only, then re-run install.sh
 ```
 
 ### Why this stack
@@ -215,10 +223,16 @@ Router 用一個極小的靜態 embedding 模型在本地 0.07 秒分好類，Co
 ### 一鍵安裝（Quick Start）
 
 ```bash
-git clone https://github.com/royalskynet/genie-harness ~/genie-harness && bash ~/genie-harness/install.sh
+d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else git clone https://github.com/royalskynet/genie-harness "$d"; fi && bash "$d/install.sh"
 ```
 
 需要：Codex CLI（hooks 已是 stable）、Python 3.9+、numpy。第一次會下載 ~512 MB 模型，處理後只留 ~35 MB（執行期 RSS 58 MB）。若 Homebrew Python 的 pip 顯示 `externally-managed-environment`，可用 `python3 -m pip install --user --break-system-packages numpy` 把 numpy 裝到使用者套件目錄。
+
+一鍵安裝可重複執行：`~/genie-harness` 已是 clone 時改為 pull 更新，再重跑 install.sh。已安裝、只想更新：
+
+```bash
+bash ~/genie-harness/update.sh
+```
 
 **install.sh 會動四處（重跑時保留第一次建立的 `*.bak-genie` 備份）：**
 

@@ -30,6 +30,11 @@ no reliable way to tell a project checkout from personal data, and inventing a
 fuzzy heuristic would block real work. Codex's own sandbox mode and approval
 policy are the boundary here; this complements them, it does not replace them.
 
+Known gap, not on purpose (no fix, tracked here so it stays visible): variable
+indirection, e.g. `X=/; rm -rf $X`. This is a regex gate, not a shell parser,
+so it cannot resolve an arbitrary variable to its value before matching. Only
+the literal, hardcoded forms (`$HOME`, `${HOME}`, `~`) are recognized.
+
 Failure policy: fail OPEN. Any internal error allows the call, because a guard
 that breaks your terminal is worse than one that misses a phrase.
 
@@ -69,6 +74,9 @@ BASH_DENY = [
     ("curl-pipe-shell",
      r"\b(?:curl|wget|fetch)\b[^|;&]*\|\s*(?:sudo\s+)?(?:ba|z|k|fi)?sh\b",
      "This downloads code from the internet and runs it immediately. Read it before running it."),
+    ("pipe-into-shell",
+     r"\|\s*(?:sudo\s+)?(?:ba|z|k|fi)?sh\b",
+     "This pipes command output straight into a shell (decoded, generated, or otherwise). Read what it would run before running it."),
     ("publish-artifact",
      r"\b(?:npm\s+publish|yarn\s+publish|pnpm\s+publish|twine\s+upload|cargo\s+publish|gem\s+push|nuget\s+push|gh\s+release\s+create|docker\s+push)\b",
      "This publishes an artifact that other people and machines can pull. It cannot be pulled back."),
@@ -215,10 +223,38 @@ SQL_OR_QUOTE = re.compile(r"'[^']*'|\"[^\"]*\"")
 def _blank_quotes(cmd):
     """Replace quoted literals with spaces so prose can't trip a rule.
 
-    Deliberate limitation: `rm -rf "$HOME"` loses its target. That lands in the
-    warn tier via `rm-recursive` shape and Codex's approval prompt, not silently.
+    Exception: a quoted literal with no whitespace inside it (`"$HOME"`, `"~"`,
+    `"/etc/passwd"`) is a path or token, not prose, so it is unquoted and kept
+    live instead of blanked. Without this, `rm -rf "$HOME"` loses its target
+    entirely and neither denies nor warns.
     """
-    return SQL_OR_QUOTE.sub(lambda m: " " * len(m.group(0)), cmd)
+    def repl(m):
+        inner = m.group(0)[1:-1]
+        if inner and not re.search(r"\s", inner):
+            return inner
+        return " " * len(m.group(0))
+    return SQL_OR_QUOTE.sub(repl, cmd)
+
+
+# Interpreters that run a quoted string as code (`sh -c "..."`, `eval "..."`,
+# `python -c "..."`). Their payload sits inside quotes that `_blank_quotes`
+# would otherwise erase as prose -- so it has to be inspected before blanking.
+WRAPPER_RE = re.compile(
+    r"\b(?:(?:bash|sh|zsh|ksh|dash|ash)\s+(?:-\S+\s+)*-c"
+    r"|eval"
+    r"|(?:python[23]?|node|ruby|perl)\s+(?:-\S+\s+)*-[ce])\s*",
+    re.IGNORECASE)
+
+
+def _wrapped_scripts(cmd):
+    """Return the quoted payload of any indirect-execution wrapper in `cmd`."""
+    out = []
+    for m in WRAPPER_RE.finditer(cmd):
+        rest = cmd[m.end():]
+        qm = re.match(r"(['\"])(.*?)(?<!\\)\1", rest, re.DOTALL)
+        if qm:
+            out.append(qm.group(2))
+    return out
 
 
 def _clean_path(s):
@@ -239,12 +275,23 @@ PATH_DENY_C = [(n, re.compile(p), r) for n, p, r in PATH_DENY]
 PATH_WARN_C = [(n, re.compile(p), r) for n, p, r in PATH_WARN]
 
 
-def inspect_command(cmd):
+def inspect_command(cmd, _depth=0):
     """-> list of (severity, rule, reason). severity in {'deny','warn'}."""
     if not cmd or not isinstance(cmd, str):
         return []
     hits = []
     stripped = "\n".join(l.split("#", 1)[0] for l in cmd.splitlines())
+
+    # Indirect execution (`sh -c "..."`, `eval "..."`, `python -c "..."`) hides
+    # its payload inside quotes that the prose-safe blanking below is designed
+    # to erase. Inspect the unwrapped payload first; a bounded depth stops
+    # pathological self-nesting from recursing forever.
+    if _depth < 4:
+        for inner in _wrapped_scripts(stripped):
+            hits.extend(inspect_command(inner, _depth + 1))
+    if any(h[0] == "deny" for h in hits):
+        return [h for h in hits if h[0] == "deny"][:1]
+
     live = _blank_quotes(stripped)              # prose-safe: literals become spaces
     sql_live = re.sub(r"[\"']", "", stripped)  # literals rules need the statement text
 
@@ -252,8 +299,8 @@ def inspect_command(cmd):
         hay = sql_live if name in LITERAL_RULES else live
         if rx.search(hay):
             hits.append(("deny", name, reason))
-    if hits:
-        return hits
+    if any(h[0] == "deny" for h in hits):
+        return [h for h in hits if h[0] == "deny"]
 
     for name, rx, pred, reason in TARGET_DENY_C:
         for m in rx.finditer(live):

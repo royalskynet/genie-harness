@@ -27,7 +27,7 @@ Eight intent labels:
 | `execute_request` | multi-step task — do the reversible steps, stop before the irreversible one |
 | `teach_me` | user wants to learn — explain, then check they understood |
 | `user_confused` | user sounds lost — simpler words, fewer terms |
-| `research_needed` | answer requires looking things up — community first, then official docs |
+| `research_needed` | choosing a tool, about to hand-roll, or answer depends on version — `$wheel`: official docs + community consensus + mature repos, then a verdict |
 | `risky_action` | destructive/irreversible — warn before acting |
 | `ambiguous_request` | could go several ways — ask one question |
 | `unsure` | router abstained — ask one short question instead of guessing |
@@ -63,7 +63,7 @@ Requirements: Codex CLI (hooks are stable), Python 3.9+, numpy. First run downlo
 
 | Touch point | Change | Restore |
 |---|---|---|
-| `~/.agents/skills/genie-*` | 5 symlinks to this repo's `skills/`; existing same-name paths are moved to `.bak-genie` | Remove the five Genie symlinks listed below; restore any matching backup |
+| `~/.agents/skills/{genie-*,wheel}` | 5 symlinks to this repo's `skills/`; existing same-name paths are moved to `.bak-genie` | Remove the five Genie symlinks listed below; restore any matching backup |
 | `~/.codex/hooks.json` | `UserPromptSubmit` (router + prefs) and `PreToolUse` (guard) entries added or refreshed; other hooks are kept | `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json` |
 | `~/.codex/config.toml` | the matching hook `trusted_hash` entries are added or refreshed | `mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml` |
 | `~/.codex/AGENTS.md` | this repo's AGENTS.md appended once, marker-guarded | `mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md` |
@@ -73,7 +73,7 @@ An existing backup is never overwritten. If a same-name skill already has a `.ba
 Remove the installed Genie skill links, then restore any paths the installer backed up:
 
 ```bash
-for name in genie-execute genie-explain genie-humanizer genie-research; do
+for name in genie-execute genie-explain genie-humanizer genie-terms wheel; do
   link="$HOME/.agents/skills/$name"
   backup="$link.bak-genie"
   if [ -L "$link" ] && [[ "$(readlink "$link")" == */genie-harness/skills/"$name" ]]; then rm "$link"; fi
@@ -108,7 +108,7 @@ router/
   test_repo.py             self-check: size budget, no hardcoded paths, hooks resolve, no drift
   setup_model.py           one-time: download potion-multilingual-128M → trim vocab → int8
 skills/
-  genie-research/          community first → official docs → GitHub high-star active; at most 3 options
+  wheel/                   prior-art before building: official docs + community consensus + mature repos → 7-level verdict
   genie-explain/           user says "don't get it": shorter, fewer terms, add an analogy
   genie-execute/           do the reversible steps in one go, stop before the irreversible one
   genie-humanizer/         conversational tone, continuity, no fake-human decoration
@@ -196,7 +196,7 @@ Router 用一個極小的靜態 embedding 模型在本地 0.07 秒分好類，Co
 | `execute_request` | 多步驟任務 — 可逆的做完，只停在不可逆那一步前面 |
 | `teach_me` | 他想學 — 講解，然後確認他懂了 |
 | `user_confused` | 使用者聽不懂 — 更短、更少術語 |
-| `research_needed` | 答案需要查找 — 先查社群，再看官方文件 |
+| `research_needed` | 要選方案、要自己寫、或答案看版本 — `$wheel`：官方文件＋社群共識＋成熟輪子，再出裁決 |
 | `risky_action` | 破壞性／不可逆 — 先警告 |
 | `ambiguous_request` | 可能有多種做法 — 只問一題 |
 | `unsure` | router 放棄判斷 — 問一句最短的問題，不要硬猜 |
@@ -238,7 +238,7 @@ bash ~/genie-harness/update.sh
 
 | 動什麼 | 改法 | 如何復原 |
 |---|---|---|
-| `~/.agents/skills/genie-*` | 5 個 symlink 指回本 repo 的 `skills/`；同名舊路徑先移到 `.bak-genie` | 移除下方列出的五個 Genie symlink，再還原同名備份 |
+| `~/.agents/skills/{genie-*,wheel}` | 5 個 symlink 指回本 repo 的 `skills/`；同名舊路徑先移到 `.bak-genie` | 移除下方列出的五個 Genie symlink，再還原同名備份 |
 | `~/.codex/hooks.json` | 新增或更新 `UserPromptSubmit`（router + prefs）與 `PreToolUse`（guard）；保留其他 hooks | `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json` |
 | `~/.codex/config.toml` | 新增或更新 hook 對應的 `trusted_hash` | `mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml` |
 | `~/.codex/AGENTS.md` | 尾端加上本專案的 AGENTS.md（一次，marker 防重複） | `mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md` |
@@ -248,7 +248,7 @@ bash ~/genie-harness/update.sh
 移除已安裝的 Genie 技能連結，並還原安裝器備份的舊路徑：
 
 ```bash
-for name in genie-execute genie-explain genie-humanizer genie-research; do
+for name in genie-execute genie-explain genie-humanizer genie-terms wheel; do
   link="$HOME/.agents/skills/$name"
   backup="$link.bak-genie"
   if [ -L "$link" ] && [[ "$(readlink "$link")" == */genie-harness/skills/"$name" ]]; then rm "$link"; fi
@@ -277,7 +277,7 @@ router/
   test_repo.py             自檢：大小預算、無絕對路徑、hook 指向存在、不漂移
   setup_model.py           一次性：下載 potion-multilingual-128M → 修剪詞表 → int8
 skills/
-  genie-research/          先社群 → 官方文件 → GitHub 高星活躍；最多 3 方案
+  wheel/                   動手前查 prior-art：官方文件＋社群共識＋成熟輪子 → 7 級裁決
   genie-explain/           使用者說看不懂：更短、更少術語、加比喻
   genie-execute/           可逆的一步做完，只停在不可逆那一步前面
   genie-humanizer/         對話語氣、上下文連貫、不假人味

@@ -23,7 +23,7 @@ genie: intent=<標籤> conf=<high|low>
 | `terms` | 對方問「什麼是 X」、或這個詞他**之後還會再遇到**。一次最多一個詞 | `$genie-terms` |
 | `examples` | 抽象講不過去、而一個具體例子會讓他懂 | `$genie-explain` |
 | `steps` | 要做多步驟的事，先給他路徑 | `$genie-execute` |
-| `research` | 答案依賴版本／時間／政策，或**正在選用哪個方案** | `$genie-research` |
+| `research` | 答案依賴版本／時間／政策，或**正在選用哪個方案** | `$wheel` |
 | `confirm` | 碰到不可逆的事 | 見下方「不可逆」 |
 | `humanize` | 一直。預設開著，這是基本禮貌 | `$genie-humanizer` |
 
@@ -54,7 +54,7 @@ genie: intent=<標籤> conf=<high|low>
 | `execute_request` | 用 `$genie-execute`。可逆的步驟**一口氣做完**，只停在不可逆的那一步前面。 |
 | `teach_me` | 他想學。用 `$genie-explain`。講完記得確認他懂了沒。 |
 | `user_confused` | 用 `$genie-explain`：更短、更少術語、一個具體比喻。後面整段對話都維持這個難度。 |
-| `research_needed` | 用 `$genie-research`。**先查社群踩坑，再看官方文件，最後才選方案。** |
+| `research_needed` | 用 `$wheel`。**先查官方文件、社群共識、成熟輪子，再出裁決；自造是最後一格。** |
 | `risky_action` | 見下方「不可逆」。 |
 | `ambiguous_request` | 只問**一個**最關鍵的問題，或列**最多 3 種**理解讓他選。問完就停。 |
 | `unsure`（`conf=low`） | 你判斷不出他想要什麼。**承認不確定**，問一句最短的問題。不要硬猜。 |
@@ -87,5 +87,5 @@ genie: intent=<標籤> conf=<high|low>
 ## 免費優先
 
 - 不建議要付費、要訂閱、要信用卡的東西。有免費的就用免費的。
-- **能用現成的就用現成的。** 自己寫之前，先照 `$genie-research` 的順序查一遍。
+- **能用現成的就用現成的。** 自己寫之前，先照 `$wheel` 的順序查一遍。
 - 依賴越少越好。能用標準函式庫就不要裝套件。

@@ -247,4 +247,12 @@ if [ -f "$_PREFS" ]; then
     && echo "prefs smoke test: PASS" \
     || { echo "prefs smoke test: FAILED"; exit 1; }
 fi
+# Other installed tools doing a Genie job: list now, ask on the first prompt.
+"$PY" "$HERE/router/overlap.py" 2>/dev/null | "$PY" -c '
+import json, sys
+found = json.load(sys.stdin)
+for job, tools in sorted(found.items()):
+    print("overlap: %s also done by %s -> Genie will ask you who owns it" % (job, ", ".join(tools)))
+' 2>/dev/null || true
+echo "done. first codex prompt: Genie introduces itself and asks your level."
 echo "done. try:  codex 'React 還是 Vue 比較好'"

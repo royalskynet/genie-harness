@@ -21,6 +21,10 @@ from the prefs file, and cannot be switched off by any level or any block state.
 That is a load-bearing boundary, and `test_prefs.py` asserts it rather than
 trusting this docstring.
 
+Ownership is the one bridge, and it is narrow: `owners` records which installed
+tool the user chose for a job Genie shares (guard / research / style, see
+overlap.py). It counts only while that tool is still installed.
+
 Two more decisions worth knowing:
 
 `level` is a *default layer*, not a set of pins. Changing your level never
@@ -41,26 +45,31 @@ import re
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import overlap  # noqa: E402
+
 LEVELS = ("beginner", "intermediate", "advanced", "expert")
 STATES = ("on", "auto", "off")
 
 # Defaults per level. Only consulted for blocks the user has not pinned.
+# `research` is on at every level: knowing how others already solved it is worth
+# a look even for an expert. Off only when the user says so (`!research off`).
 LEVEL_DEFAULTS = {
     "beginner": {
         "terms": "on", "examples": "on", "steps": "on",
-        "research": "auto", "confirm": "on", "humanize": "on",
+        "research": "on", "confirm": "on", "humanize": "on",
     },
     "intermediate": {
         "terms": "auto", "examples": "auto", "steps": "auto",
-        "research": "auto", "confirm": "on", "humanize": "on",
+        "research": "on", "confirm": "on", "humanize": "on",
     },
     "advanced": {
         "terms": "off", "examples": "auto", "steps": "off",
-        "research": "auto", "confirm": "on", "humanize": "off",
+        "research": "on", "confirm": "on", "humanize": "off",
     },
     "expert": {
         "terms": "off", "examples": "off", "steps": "off",
-        "research": "auto", "confirm": "on", "humanize": "off",
+        "research": "on", "confirm": "on", "humanize": "off",
     },
 }
 
@@ -159,6 +168,11 @@ JUST_CODE_BLOCKS = ("terms", "examples", "steps")
 LEVEL_MARKER = re.compile(r"!\s*level\s*(?:=\s*)?(beginner|intermediate|advanced|expert)\b",
                           re.IGNORECASE)
 
+# `!owner guard=dcg` / `!owner research=genie`: who does a job Genie shares.
+OWNER_NAME = re.compile(r"[\w.@-]{1,60}")
+OWNER_MARKER = re.compile(r"!\s*owner\s+(guard|research|style)\s*=\s*([\w.@-]{1,60})",
+                          re.IGNORECASE)
+
 CN_TO_BLOCK = {
     "百科": "terms", "小百科": "terms", "術語": "terms", "解釋": "terms",
     "說明": "terms", "步驟": "steps", "拆解": "steps", "類比": "examples",
@@ -197,6 +211,17 @@ def _blank(data):
         for k, v in blocks.items():
             if k in BLOCKS and v in STATES:
                 out["blocks"][k] = v
+    # Who owns a job Genie shares with another tool. A name here only takes
+    # effect while that tool is actually installed (see owner_of), so a
+    # hand-edited `owners.guard` cannot switch the guard off by itself.
+    owners = data.get("owners")
+    if isinstance(owners, dict):
+        for k, v in owners.items():
+            if k in overlap.CAPS and isinstance(v, str) and OWNER_NAME.fullmatch(v):
+                out.setdefault("owners", {})[k] = v.lower()
+    seen = data.get("seen")
+    if isinstance(seen, list):
+        out["seen"] = [s for s in seen if isinstance(s, str)][:200]
     return out
 
 
@@ -236,6 +261,16 @@ def block_state(name, data):
     if pinned:
         return pinned
     return LEVEL_DEFAULTS.get(data.get("level", "beginner"), {}).get(name, "auto")
+
+
+def owner_of(cap, data, found):
+    """The other tool that owns `cap`, or "" when Genie does.
+
+    Ownership only counts while that tool is still installed: uninstall it and
+    Genie picks the job back up without anyone having to remember to.
+    """
+    o = data.get("owners", {}).get(cap, "")
+    return o if o and o != "genie" and o in found.get(cap, ()) else ""
 
 
 _NOUN_RE = re.compile(NOUN, re.IGNORECASE)
@@ -304,19 +339,45 @@ def parse_prompt(prompt, data=None):
     return turn, durable, notes
 
 
-def resolve(prompt=None, data=None, persist=True, path=None):
-    """Full pipeline. Returns a dict describing this turn."""
+def resolve(prompt=None, data=None, persist=True, path=None, found=None):
+    """Full pipeline. Returns a dict describing this turn.
+
+    `found` is the overlap scan ({job: [other tools]}); scanned from disk when
+    reading the real prefs file, empty when the caller hands in `data`.
+    """
+    first_run = data is None and not os.path.exists(path or default_path())
+    if found is None:
+        found = {}
+        if data is None:
+            try:
+                found = overlap.scan()
+            except Exception:
+                pass
     data = _blank(data) if data is not None else load(path)
     turn, durable, notes = parse_prompt(prompt, data)
+    text = prompt if isinstance(prompt, str) else ""
 
-    lvl = LEVEL_MARKER.search(prompt or "") if isinstance(prompt, str) else None
+    lvl = LEVEL_MARKER.search(text)
     if lvl and lvl.group(1).lower() != data["level"]:
         notes.append("level -> %s (marker)" % lvl.group(1).lower())
-    if (durable or lvl) and persist:
+    owners = {m.group(1).lower(): m.group(2).lower() for m in OWNER_MARKER.finditer(text)}
+    for cap, who in owners.items():
+        notes.append("owner of %s -> %s (marker)" % (cap, who))
+
+    # Jobs another installed tool also does, that the user has not been asked about.
+    seen = set(data.get("seen", []))
+    ask = {c: n for c, n in found.items()
+           if c not in owners and any("%s:%s" % (c, x) not in seen for x in n)}
+
+    if (durable or lvl or owners or ask or first_run) and persist:
         merged = _blank(data)
         merged["blocks"].update(durable)
         if lvl:
             merged["level"] = lvl.group(1).lower()
+        if owners:
+            merged.setdefault("owners", {}).update(owners)
+        # Asked once is enough; a tool installed later is a new name and asks again.
+        merged["seen"] = sorted(seen | {"%s:%s" % (c, x) for c, n in found.items() for x in n})
         try:
             save(merged, path)
             data = merged
@@ -324,8 +385,18 @@ def resolve(prompt=None, data=None, persist=True, path=None):
             notes.append("(could not write prefs file; change applies to this turn only)")
     if lvl:  # applies this turn even if the write failed
         data = dict(data, level=lvl.group(1).lower())
+    if owners:
+        data = dict(data, owners=dict(data.get("owners", {}), **owners))
 
     states = {b: block_state(b, data) for b in BLOCKS}
+    handed = {c: owner_of(c, data, found) for c in overlap.CAPS}
+    if handed["research"]:
+        states["research"] = "off"
+        turn.pop("research", None)  # the other tool does its own build nudge
+        notes[:] = [n for n in notes if "about to build" not in n]
+    if handed["style"]:
+        for b in STYLE_BLOCKS:
+            states[b] = "off"
     for name, st in turn.items():
         states[name] = st
     return {
@@ -334,29 +405,72 @@ def resolve(prompt=None, data=None, persist=True, path=None):
         "turn_overrides": turn,
         "changes": notes,
         "blocks": states,
+        "first_run": first_run,
+        "ask_owner": ask,
+        "handed_off": {c: o for c, o in handed.items() if o},
     }
+
+
+# Blocks a dedicated style tool (caveman and friends) takes over when it owns `style`.
+STYLE_BLOCKS = ("terms", "examples", "humanize")
+CLI = "python3 " + os.path.abspath(__file__)
+
+ONBOARDING = (
+    "FIRST RUN. Before answering, introduce Genie in at most 3 short lines: it explains "
+    "things at the user's level, looks for an existing tool before building one, and "
+    "stops before anything irreversible. Then ask ONE question, which level fits them: "
+    "beginner (everyday analogies + glossary) / intermediate (analogies from tools they "
+    "use) / advanced (adjacent tech, no glossary) / expert (no analogies: mechanism, "
+    "trade-off, source). Say that at every level Genie still checks how others already "
+    "solved it before building, since that is worth knowing even for an expert, and "
+    "that `!research off` turns it off. They can answer `!level <l>` or in plain words; "
+    "on plain words run `%s set level <l>`. Then answer their message." % CLI)
 
 
 def render_context(res):
     """The short block injected as UserPromptSubmit additionalContext."""
-    lines = ["[genie prefs] level=%s" % res["level"],
-             "register: " + REGISTER.get(res["level"], REGISTER["beginner"])]
+    handed = res.get("handed_off", {})
+    lines = ["[genie prefs] level=%s" % res["level"]]
+    if not handed.get("style"):
+        lines.append("register: " + REGISTER.get(res["level"], REGISTER["beginner"]))
+    if res.get("first_run"):
+        lines.append(ONBOARDING)
     if res["changes"]:
         lines.append("changed this message: " + "; ".join(res["changes"]))
+    for cap, names in sorted(res.get("ask_owner", {}).items()):
+        other = "/".join(names)
+        lines.append(
+            "OVERLAP: %s also does `%s` (%s). Ask the user once, in the same message as "
+            "anything else you ask, who should own it, with this advice: %s. On their "
+            "answer run `%s set owner %s <genie|%s>`. If they pick Genie, offer to turn "
+            "%s's version off, show the exact change and wait for a yes (it is their "
+            "config, not Genie's)." % (other, cap, overlap.CAPS[cap],
+                                       overlap.RECOMMEND[cap].format(other=other),
+                                       CLI, cap, names[0], other))
     for name in BLOCKS:
         st = res["blocks"][name]
+        owned = next((o for c, o in handed.items()
+                      if (c == "research" and name == "research")
+                      or (c == "style" and name in STYLE_BLOCKS)), "")
         mark = " (this turn only)" if name in res["turn_overrides"] else (
-            " (you set this)" if name in res["pinned"] else "")
+            " (handled by %s)" % owned if owned else (
+                " (you set this)" if name in res["pinned"] else ""))
         lines.append("- %s[%s]%s: %s" % (name, st, mark, BLOCK_MEANING[name]))
     lines.append("not preference-tunable, always on: " + "; ".join(ALWAYS))
-    lines.append("NOT blocks, and no preference can turn them off: the "
-                 "catastrophic-command gate, and Codex sandbox/approval.")
+    if handed.get("guard"):
+        lines.append("catastrophic-command gate: handed to %s by the user; Genie's guard "
+                     "stands down while %s is installed. Codex sandbox/approval still apply."
+                     % (handed["guard"], handed["guard"]))
+    else:
+        lines.append("NOT blocks, and no preference can turn them off: the "
+                     "catastrophic-command gate, and Codex sandbox/approval.")
     return "\n".join(lines)
 
 
 USAGE = """genie prefs
   (no args)                 show current settings
   set level <l>             beginner | intermediate | advanced | expert
+  set owner <job> <who>     guard | research | style -> genie or the other tool
   set <block> <state>       %s
   clear <block>             back to following your level
   reset                     forget everything
@@ -373,6 +487,8 @@ def main(argv):
         for b in BLOCKS:
             src = "pinned" if b in data["blocks"] else "from level"
             print("  %-9s %-4s (%s)" % (b, block_state(b, data), src))
+        for cap, who in sorted(data.get("owners", {}).items()):
+            print("owner: %-8s %s" % (cap, who))
         print("file: %s" % p)
         return 0
     if args[0] == "path":
@@ -390,6 +506,11 @@ def main(argv):
                 print("level must be one of: %s" % ", ".join(LEVELS))
                 return 2
             data["level"] = val
+        elif key == "owner" and len(args) > 3:
+            if val not in overlap.CAPS or not OWNER_NAME.fullmatch(args[3]):
+                print("usage: set owner <%s> <genie|tool>" % "|".join(overlap.CAPS))
+                return 2
+            data.setdefault("owners", {})[val] = args[3].lower()
         elif key in BLOCKS:
             if val not in STATES:
                 print("%s must be one of: %s" % (key, ", ".join(STATES)))
@@ -399,8 +520,9 @@ def main(argv):
             print("unknown key: %s\n\n%s" % (key, USAGE))
             return 2
         save(data, p)
-        print("saved: level=%s %s" % (data["level"],
-                                      json.dumps(data["blocks"], ensure_ascii=False)))
+        print("saved: level=%s %s %s" % (data["level"],
+                                         json.dumps(data["blocks"], ensure_ascii=False),
+                                         json.dumps(data.get("owners", {}))))
         return 0
     if args[0] == "clear" and len(args) >= 2:
         data = load(p)

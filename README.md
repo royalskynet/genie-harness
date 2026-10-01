@@ -41,7 +41,7 @@ Six independent blocks, each `on` / `auto` (only when needed) / `off`. `auto` is
 | `terms` | plain-language glossary, one term max |
 | `examples` | a concrete analogy when abstraction loses them |
 | `steps` | numbered steps before multi-step work |
-| `research` | run `$wheel`: find an existing tool/package before hand-rolling. Auto-on for the turn when you ask to build something |
+| `research` | run `$wheel`: find an existing tool/package before hand-rolling. On at every level (experts benefit from knowing prior art too); `!research off` to stop |
 | `confirm` | state what is irreversible and confirm before doing it |
 | `humanize` | natural conversational tone, continuity, no robotic scaffolding |
 
@@ -58,7 +58,11 @@ Six independent blocks, each `on` / `auto` (only when needed) / `off`. `auto` is
 | `advanced` | off | auto | off | adjacent tech (index, queue, lockfile) |
 | `expert` | off | off | off | none: mechanism, trade-off, source |
 
-**Not blocks, and no preference can turn them off:** the catastrophic-command gate (`router/guard_dangerous.py`), Codex's sandbox and approval policy, and "say when you don't know". Turning off the nagging does not turn off the protection.
+**First run:** the first prompt after install makes Genie introduce itself in three lines and ask which level fits you. Answer `!level <name>` or in plain words.
+
+**Overlapping tools:** Genie is a whole-agent harness, not a security suite. When another installed tool does one of its jobs (`guard` command blocking, `research` prior-art search, `style` tone/verbosity), the installer lists it and the next prompt asks you once who owns that job, with a recommendation (for `guard`: the dedicated tool). Pick with `!owner <job>=<genie|tool>`. Genie stands down on that job while the other tool stays installed and takes it back if you uninstall it. Tools installed later are detected and asked about the same way.
+
+**Not blocks, and no preference can turn them off:** the catastrophic-command gate (`router/guard_dangerous.py`), Codex's sandbox and approval policy, and "say when you don't know". Turning off the nagging does not turn off the protection. The one exception is handing `guard` to another command guard that is actually installed as a PreToolUse hook; a prefs file alone cannot do it.
 
 ### Quick Start (one-line install)
 
@@ -109,10 +113,11 @@ router/
   intents.json             keywords & example sentences for the 8 intents (zh/en), thresholds here
   prefs.py                 block resolution: level defaults, pins, per-call overrides
   prefs_hook.py            UserPromptSubmit hook: injects this turn's [genie prefs]
+  overlap.py               finds other installed tools doing guard / research / style
   guard_dangerous.py       PreToolUse hook: deny catastrophic commands, warn on ambiguous ones
   eval_set.json            74 hand-written dev cases (NOT a benchmark)
   test_router.py           self-check: boundary cases + dev set, per-class, safe=100%
-  test_prefs.py            self-check: 13 tests incl. blocks-cannot-disable-enforcement
+  test_prefs.py            self-check: 19 tests incl. blocks-cannot-disable-enforcement
   test_guard.py            self-check: 41 deny + 4 warn rules, 33 must-pass, write scan
   test_repo.py             self-check: size budget, no hardcoded paths, hooks resolve, no drift
   setup_model.py           one-time: download potion-multilingual-128M → trim vocab → int8
@@ -219,7 +224,7 @@ Router 用一個極小的靜態 embedding 模型在本地 0.07 秒分好類，Co
 | `terms` | 白話小百科，一次最多一個詞 |
 | `examples` | 抽象講不過去時，給一個具體比喻 |
 | `steps` | 多步驟的事，先給路徑 |
-| `research` | 跑 `$wheel`：自己寫之前先找現成工具／套件。偵測到「幫我寫一個…」時這一輪自動打開 |
+| `research` | 跑 `$wheel`：自己寫之前先找現成工具／套件。每一級預設都開（專家也值得先知道別人怎麼做）；`!research off` 關閉 |
 | `confirm` | 碰到不可逆的事，先講清楚再問 |
 | `humanize` | 自然對話語氣、上下文連貫、不假人味 |
 
@@ -236,7 +241,11 @@ Router 用一個極小的靜態 embedding 模型在本地 0.07 秒分好類，Co
 | `advanced` | 關 | 自動 | 關 | 相鄰技術（索引、佇列、lockfile） |
 | `expert` | 關 | 關 | 關 | 不比喻：機制、取捨、來源 |
 
-**不是區塊，任何偏好設定都關不掉：** 災難指令閘門（`router/guard_dangerous.py`）、Codex 的 sandbox 與 approval、以及「不確定就說不確定」。關掉提醒不等於關掉保護。
+**第一次用：** 裝完後的第一則訊息，Genie 會用三行自我介紹，問你是哪一級。回 `!level <名稱>` 或直接用白話說都可以。
+
+**跟其他套件撞功能：** Genie 是整個 agent 的 harness，不是專門的安全套件。另一個已裝工具也在做它的某件事時（`guard` 擋危險指令、`research` 找輪子、`style` 語氣詳略），安裝程式會列出來，下一則訊息問你一次交給誰，並附建議（`guard` 建議交給專門工具）。用 `!owner <事>=<genie|工具名>` 選。交出去的那件事 Genie 就不做；那個工具被移除，Genie 自動接回。之後才裝的工具也會被偵測、一樣問一次。
+
+**不是區塊，任何偏好設定都關不掉：** 災難指令閘門（`router/guard_dangerous.py`）、Codex 的 sandbox 與 approval、以及「不確定就說不確定」。關掉提醒不等於關掉保護。唯一例外是把 `guard` 交給另一個**真的裝成 PreToolUse hook** 的指令守門工具；只改設定檔做不到。
 
 ### 一鍵安裝（Quick Start）
 
@@ -287,6 +296,7 @@ router/
   intents.json             八類的關鍵字與範例句（中英），threshold 在這裡調
   prefs.py                 區塊解析：level 預設、pin、單次覆寫
   prefs_hook.py            UserPromptSubmit hook：注入這一輪的 [genie prefs]
+  overlap.py               找出也在做 guard／research／style 的其他已裝工具
   guard_dangerous.py       PreToolUse hook：擋災難指令，模糊的先警告
   eval_set.json            74 句手寫 dev 語料（不是 benchmark）
   test_router.py           自檢：邊界案例 + dev 語料，per-class，safe=100%

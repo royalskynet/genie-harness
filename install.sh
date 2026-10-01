@@ -2,7 +2,7 @@
 # Genie Harness installer. Re-runnable with first-run backups preserved.
 #   1. numpy present?            (only runtime dep)
 #   2. router model              (one-time ~512 MB download -> ~35 MB on disk)
-#   3. skills  -> ~/.agents/skills/genie-*   (symlinks)
+#   3. skills  -> ~/.agents/skills/{genie-*,wheel}   (symlinks)
 #   4. hook    -> ~/.codex/hooks.json        (merged, existing hooks kept)
 #   5. AGENTS.md -> ~/.codex/AGENTS.md       (appended once, marker-guarded)
 #   6. hook trust -> ~/.codex/config.toml
@@ -43,8 +43,8 @@ is_genie_link() {
 }
 
 # Check every destination before replacing any, so an occupied backup path
-# cannot leave the four links half-installed.
-for d in "$HERE"/skills/genie-*; do
+# cannot leave the links half-installed.
+for d in "$HERE"/skills/*; do
   name="$(basename "$d")"
   dest="$SKILLS/$name"
   backup="$dest.bak-genie"
@@ -69,7 +69,7 @@ if ! grep -qF "$MARK" "$A" 2>/dev/null && [ -f "$A" ] &&
   exit 1
 fi
 
-for d in "$HERE"/skills/genie-*; do
+for d in "$HERE"/skills/*; do
   name="$(basename "$d")"
   dest="$SKILLS/$name"
   backup="$dest.bak-genie"

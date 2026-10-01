@@ -37,7 +37,7 @@
 
 ### 4. Skills（5 個）
 - `genie-humanizer`：對話關係（上下文、語氣、節奏、誠實），禁止假人味
-- `genie-research`：社群優先 → 官方 → GitHub 高星活躍；有輪子不自造
+- `wheel`：動手前查官方／社群共識／成熟輪子 → 7 級裁決；自造最後一格
 - `genie-execute`：可逆步驟批次做，只停不可逆那一步
 - `genie-explain`：降一级難度，一段 ≤3 句，一次只講一個詞
 - `genie-terms`：一次一個詞、白話、具體比喻

@@ -13,7 +13,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILLS = ("genie-execute", "genie-explain", "genie-humanizer", "genie-research")
+SKILLS = ("genie-execute", "genie-explain", "genie-humanizer", "wheel")
 
 
 class InstallerTest(unittest.TestCase):

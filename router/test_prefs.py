@@ -28,13 +28,51 @@ def eq(got, want, label, fails):
 
 def test_defaults_per_level(fails):
     d = prefs._blank({})
-    eq(prefs.block_state("terms", d), "auto", "beginner terms default", fails)
+    eq(prefs.block_state("terms", d), "on", "beginner always gets the glossary", fails)
     eq(prefs.block_state("steps", d), "on", "beginner steps default", fails)
 
     adv = prefs._blank({"level": "advanced"})
     eq(prefs.block_state("terms", adv), "off", "advanced terms default", fails)
     eq(prefs.block_state("research", adv), "auto", "advanced research default", fails)
     eq(prefs.block_state("confirm", adv), "on", "confirm survives advanced", fails)
+
+
+def test_levels_are_a_gradient(fails):
+    """Each step up says less; expert says least. Register differs per level."""
+    talk = lambda lvl: sum(prefs.block_state(b, prefs._blank({"level": lvl})) != "off"
+                           for b in ("terms", "examples", "steps", "humanize"))
+    counts = [talk(l) for l in prefs.LEVELS]
+    eq(counts, sorted(counts, reverse=True), "verbosity never rises with level", fails)
+    eq(prefs.LEVELS[-1], "expert", "expert is the top level", fails)
+    eq(len(set(prefs.REGISTER[l] for l in prefs.LEVELS)), len(prefs.LEVELS),
+       "every level has its own register", fails)
+    ctx = prefs.render_context(prefs.resolve("hi", data={"level": "expert"}, persist=False))
+    eq("register: " + prefs.REGISTER["expert"] in ctx, True, "register injected", fails)
+
+
+def test_level_marker_persists(fails):
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "prefs.json")
+        prefs.save(prefs._blank({"blocks": {"terms": "on"}}), path)
+        res = prefs.resolve("!level expert 幫我看這段", path=path)
+        eq(res["level"], "expert", "marker applies this turn", fails)
+        eq(prefs.load(path)["level"], "expert", "marker persists", fails)
+        eq(prefs.load(path)["blocks"], {"terms": "on"}, "pins survive level marker", fails)
+        eq(prefs.resolve("!level wizard", path=path)["level"], "expert",
+           "unknown level ignored", fails)
+
+
+def test_build_turns_research_on(fails):
+    """Users rarely know a wheel exists; asking to build must trigger $wheel."""
+    for p in ("幫我寫一個爬蟲程式", "我想做個記帳 app", "build me a CLI tool",
+              "write a script to rename files", "想自己寫登入", "從零開始做"):
+        res = prefs.resolve(p, data={}, persist=False)
+        eq(res["blocks"]["research"], "on", "build nudge: " + p, fails)
+    for p in ("寫個總結給我", "把這個函式改成非同步", "make a commit", "那個 bug 修好了嗎"):
+        res = prefs.resolve(p, data={}, persist=False)
+        eq(res["blocks"]["research"], "auto", "no build nudge: " + p, fails)
+    res = prefs.resolve("幫我寫一個爬蟲程式", data={"blocks": {"research": "off"}}, persist=False)
+    eq(res["blocks"]["research"], "off", "durable research off still wins", fails)
 
 
 def test_level_does_not_stomp_pins(fails):
@@ -60,7 +98,7 @@ def test_single_turn_does_not_persist(fails):
 
         # and the next turn is back to normal
         res2 = prefs.resolve("那個 bug 修好了嗎", path=path)
-        eq(res2["blocks"]["terms"], "auto", "next turn unaffected", fails)
+        eq(res2["blocks"]["terms"], "on", "next turn unaffected", fails)
 
 
 def test_durable_phrasing_persists(fails):

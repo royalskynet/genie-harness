@@ -42,6 +42,12 @@ Failure policy: fail OPEN. Any internal error allows the call, because a guard
 that breaks your terminal is worse than one that misses a phrase.
 
 Escape hatch: GENIE_ALLOW_DANGEROUS=1 skips every rule.
+
+Handoff: Genie is not a security suite. If the user picked another command guard
+(`!owner guard=<tool>`) and that tool is a PreToolUse hook in Codex right now,
+this gate stands down. Both conditions are required, so a prefs file alone can
+never leave the machine unguarded, and uninstalling the other tool brings this
+gate back on its own.
 """
 import json
 import os
@@ -429,6 +435,24 @@ def _out(payload):
     json.dump(payload, sys.stdout)
 
 
+def _handed_off():
+    """True when the user gave this job to another installed command guard.
+
+    Two gates, both required: the user chose it (`!owner guard=<tool>`), and that
+    tool is a PreToolUse hook in Codex right now. A prefs file alone, hostile or
+    stale, can never leave the machine with no guard at all.
+    """
+    try:
+        import prefs
+        data = prefs.load()
+        if not data.get("owners", {}).get("guard"):
+            return False
+        import overlap
+        return bool(prefs.owner_of("guard", data, overlap.scan()))
+    except Exception:
+        return False
+
+
 def main():
     if os.environ.get("GENIE_ALLOW_DANGEROUS") == "1":
         # Premortem A7: a bypass that leaves no trace gets discovered months later,
@@ -440,6 +464,8 @@ def main():
                 fh.write("GENIE_ALLOW_DANGEROUS=1 bypass active\n")
         except Exception:
             pass
+        return
+    if _handed_off():
         return
     try:
         data = json.loads(sys.stdin.read() or "{}")

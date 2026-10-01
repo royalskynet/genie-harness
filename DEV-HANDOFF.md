@@ -23,6 +23,8 @@
 ### 2. 偏好系統（`router/prefs.py` + `router/prefs_hook.py`）
 - 6 個三態區塊（terms/examples/steps/research/confirm/humanize）
 - level 預設層（beginner/intermediate/advanced/expert）＋每級 register（比喻來源），不覆蓋使用者 pin；`!level <l>` 可在對話切換
+- 首次啟動（無 prefs.json）注入 FIRST RUN：自我介紹＋問等級；research 每級預設 on
+- `router/overlap.py` 掃 hooks.json＋skills 目錄找撞功能工具（guard/research/style），問一次交給誰（`!owner`），只在對方工具仍安裝時生效；guard 交出需該工具真的是 PreToolUse hook
 - 單次覆寫（`!terms off`、`不用百科`）與永久關閉（`不要再給我百科了`）
 - 問「什麼是 X」時強制 on，不管設定
 - 原子寫入、壞檔退回預設、hostile key 忽略

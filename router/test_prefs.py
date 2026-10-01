@@ -17,6 +17,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import prefs  # noqa: E402
 import guard_dangerous as guard  # noqa: E402
+import overlap  # noqa: E402
+
+# Tests must not depend on what this machine has installed.
+_real_scan = overlap.scan
+overlap.scan = lambda *a, **k: {}
 
 PREFS_HOOK = os.path.join(HERE, "prefs_hook.py")
 
@@ -33,7 +38,9 @@ def test_defaults_per_level(fails):
 
     adv = prefs._blank({"level": "advanced"})
     eq(prefs.block_state("terms", adv), "off", "advanced terms default", fails)
-    eq(prefs.block_state("research", adv), "auto", "advanced research default", fails)
+    eq(prefs.block_state("research", adv), "on", "advanced research default", fails)
+    eq(prefs.block_state("research", prefs._blank({"level": "expert"})), "on",
+       "experts also hear how others solved it", fails)
     eq(prefs.block_state("confirm", adv), "on", "confirm survives advanced", fails)
 
 
@@ -70,7 +77,7 @@ def test_build_turns_research_on(fails):
         eq(res["blocks"]["research"], "on", "build nudge: " + p, fails)
     for p in ("寫個總結給我", "把這個函式改成非同步", "make a commit", "那個 bug 修好了嗎"):
         res = prefs.resolve(p, data={}, persist=False)
-        eq(res["blocks"]["research"], "auto", "no build nudge: " + p, fails)
+        eq(any("about to build" in n for n in res["changes"]), False, "no build nudge: " + p, fails)
     res = prefs.resolve("幫我寫一個爬蟲程式", data={"blocks": {"research": "off"}}, persist=False)
     eq(res["blocks"]["research"], "off", "durable research off still wins", fails)
 
@@ -237,6 +244,80 @@ def test_blocks_cannot_disable_enforcement(fails):
         # and the guard exposes no env var the prefs system is allowed to set
         if set(prefs.BLOCKS) & {"guard", "sandbox", "enforcement", "safety", "approval"}:
             fails.append("an enforcement-ish name leaked into BLOCKS: %r" % (prefs.BLOCKS,))
+
+
+def test_guard_handoff_needs_a_real_guard(fails):
+    """Handing the guard to another tool must not be a way to have no guard.
+
+    `owners.guard` in the prefs file only counts while that tool is a PreToolUse
+    hook in Codex. Without it the guard keeps denying.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "prefs.json")
+        codex = os.path.join(td, "codex")
+        os.makedirs(codex)
+        prefs.save({"owners": {"guard": "dcg"}}, path)
+        env = dict(os.environ, GENIE_PREFS=path, CODEX_HOME=codex)
+        env.pop("GENIE_ALLOW_DANGEROUS", None)
+
+        def decision():
+            p = subprocess.run(
+                [sys.executable, os.path.join(HERE, "guard_dangerous.py")],
+                input=json.dumps({"tool_name": "Bash", "tool_input": {"command": "rm -rf ~"}}),
+                capture_output=True, text=True, env=env)
+            out = p.stdout.strip()
+            return json.loads(out)["hookSpecificOutput"].get("permissionDecision") if out else "allow"
+
+        eq(decision(), "deny", "owner named but not installed: guard stays on", fails)
+        with open(os.path.join(codex, "hooks.json"), "w") as fh:
+            json.dump({"hooks": {"PreToolUse": [{"hooks": [
+                {"type": "command", "command": "dcg"}]}]}}, fh)
+        eq(decision(), "allow", "owner installed: genie stands down", fails)
+        prefs.save({"owners": {"guard": "genie"}}, path)
+        eq(decision(), "deny", "owner genie: guard on", fails)
+
+
+def test_overlap_asks_once_and_hands_off(fails):
+    found = {"research": ["dont-reinvent"], "style": ["caveman"]}
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "prefs.json")
+        res = prefs.resolve("hi", path=path, found=found)
+        eq(res["first_run"], True, "no prefs file = first run", fails)
+        ctx = prefs.render_context(res)
+        eq("FIRST RUN" in ctx and "!research off" in ctx, True, "onboarding injected", fails)
+        eq(sorted(res["ask_owner"]), ["research", "style"], "both overlaps asked", fails)
+        res = prefs.resolve("hi", path=path, found=found)
+        eq((res["first_run"], res["ask_owner"]), (False, {}), "asked only once", fails)
+        res = prefs.resolve("hi", path=path, found=dict(found, research=["dont-reinvent", "deja-vu"]))
+        eq(list(res["ask_owner"]), ["research"], "a newly installed tool asks again", fails)
+
+        res = prefs.resolve("!owner style=caveman 好", path=path, found=found)
+        eq(res["blocks"]["terms"], "off", "style handed off: glossary off", fails)
+        eq("register:" in prefs.render_context(res), False, "style handed off: no register", fails)
+        eq(res["blocks"]["confirm"], "on", "handoff never touches confirm", fails)
+        res = prefs.resolve("什麼是 hook", path=path, found=found)
+        eq(res["blocks"]["terms"], "on", "asking still explains", fails)
+        res = prefs.resolve("!owner research=dont-reinvent 幫我寫一個爬蟲程式", path=path, found=found)
+        eq(res["blocks"]["research"], "off", "research handed off: no $wheel nudge", fails)
+        res = prefs.resolve("hi", path=path, found={})
+        eq(res["blocks"]["terms"], "on", "tool uninstalled: genie takes the job back", fails)
+
+
+def test_overlap_scan_ignores_genie(fails):
+    with tempfile.TemporaryDirectory() as td:
+        sk = os.path.join(td, "skills")
+        os.makedirs(sk)
+        os.symlink(os.path.join(overlap.GENIE_DIR, "skills", "wheel"), os.path.join(sk, "wheel"))
+        os.makedirs(os.path.join(sk, "caveman"))
+        with open(os.path.join(td, "hooks.json"), "w") as fh:
+            json.dump({"hooks": {
+                "PreToolUse": [{"hooks": [
+                    {"command": "python3 %s/router/guard_dangerous.py" % overlap.GENIE_DIR},
+                    {"command": "node /opt/x/safety-net/hook.js"}]}],
+                "UserPromptSubmit": [{"hooks": [{"command": "my-guard-thing"}]}]}}, fh)
+        got = _real_scan(home=td, dirs=[sk])
+        eq(got, {"guard": ["safety-net"], "style": ["caveman"]},
+           "own files ignored; only PreToolUse counts as a guard", fails)
 
 
 def test_hook_shape_and_fail_open(fails):

@@ -41,13 +41,22 @@ Six independent blocks, each `on` / `auto` (only when needed) / `off`. `auto` is
 | `terms` | plain-language glossary, one term max |
 | `examples` | a concrete analogy when abstraction loses them |
 | `steps` | numbered steps before multi-step work |
-| `research` | search community / open-source for a wheel before hand-rolling |
+| `research` | run `$wheel`: find an existing tool/package before hand-rolling. Auto-on for the turn when you ask to build something |
 | `confirm` | state what is irreversible and confirm before doing it |
 | `humanize` | natural conversational tone, continuity, no robotic scaffolding |
 
 **Per-call opt-out:** "不用百科" / "直接給我程式碼" / `!terms off` — that turn only.
 **Durable:** "不要再給我百科了" / `!terms off` — persists until changed.
 **CLI:** `python3 router/prefs.py` (or `genie prefs`).
+
+**Levels** set the defaults and the analogy register (same length, different source of analogy). Switch with `!level <name>` in chat or `set level <name>`; pinned blocks survive.
+
+| Level | Glossary | Analogies | Steps | Analogies drawn from |
+|---|---|---|---|---|
+| `beginner` (default) | every new term | on | on | daily life |
+| `intermediate` | auto | auto | auto | tools they use (spreadsheets, folders) |
+| `advanced` | off | auto | off | adjacent tech (index, queue, lockfile) |
+| `expert` | off | off | off | none: mechanism, trade-off, source |
 
 **Not blocks, and no preference can turn them off:** the catastrophic-command gate (`router/guard_dangerous.py`), Codex's sandbox and approval policy, and "say when you don't know". Turning off the nagging does not turn off the protection.
 
@@ -210,13 +219,22 @@ Router 用一個極小的靜態 embedding 模型在本地 0.07 秒分好類，Co
 | `terms` | 白話小百科，一次最多一個詞 |
 | `examples` | 抽象講不過去時，給一個具體比喻 |
 | `steps` | 多步驟的事，先給路徑 |
-| `research` | 先查社群／開源輪子，再考慮自己寫 |
+| `research` | 跑 `$wheel`：自己寫之前先找現成工具／套件。偵測到「幫我寫一個…」時這一輪自動打開 |
 | `confirm` | 碰到不可逆的事，先講清楚再問 |
 | `humanize` | 自然對話語氣、上下文連貫、不假人味 |
 
 **單次關閉：**「不用百科」／「直接給我程式碼」／`!terms off` — 只影響這一輪。
 **永久關閉：**「不要再給我百科了」／`!terms off` — 會記住並持續生效。
 **CLI：** `python3 router/prefs.py`（或 `genie prefs`）。
+
+**等級**決定預設值與比喻來源（長度差不多，換的是比喻從哪來）。對話中打 `!level <名稱>` 或 `set level <名稱>` 切換；單獨設過的區塊不會被蓋掉。
+
+| 等級 | 小百科 | 比喻 | 步驟 | 比喻從哪來 |
+|---|---|---|---|---|
+| `beginner`（預設） | 每個新詞 | 開 | 開 | 生活 |
+| `intermediate` | 自動 | 自動 | 自動 | 用過的工具（Excel、資料夾） |
+| `advanced` | 關 | 自動 | 關 | 相鄰技術（索引、佇列、lockfile） |
+| `expert` | 關 | 關 | 關 | 不比喻：機制、取捨、來源 |
 
 **不是區塊，任何偏好設定都關不掉：** 災難指令閘門（`router/guard_dangerous.py`）、Codex 的 sandbox 與 approval、以及「不確定就說不確定」。關掉提醒不等於關掉保護。
 

@@ -41,13 +41,13 @@ import re
 import sys
 import tempfile
 
-LEVELS = ("beginner", "intermediate", "advanced")
+LEVELS = ("beginner", "intermediate", "advanced", "expert")
 STATES = ("on", "auto", "off")
 
 # Defaults per level. Only consulted for blocks the user has not pinned.
 LEVEL_DEFAULTS = {
     "beginner": {
-        "terms": "auto", "examples": "on", "steps": "on",
+        "terms": "on", "examples": "on", "steps": "on",
         "research": "auto", "confirm": "on", "humanize": "on",
     },
     "intermediate": {
@@ -55,9 +55,25 @@ LEVEL_DEFAULTS = {
         "research": "auto", "confirm": "on", "humanize": "on",
     },
     "advanced": {
+        "terms": "off", "examples": "auto", "steps": "off",
+        "research": "auto", "confirm": "on", "humanize": "off",
+    },
+    "expert": {
         "terms": "off", "examples": "off", "steps": "off",
         "research": "auto", "confirm": "on", "humanize": "off",
     },
+}
+
+# How to explain, per level. Same length budget at every level; what changes is
+# where the analogy comes from. Concrete table per term: $genie-explain.
+REGISTER = {
+    "beginner": "analogies from daily life (kitchen, post office, game saves); "
+                "every new term gets a one-line glossary",
+    "intermediate": "analogies from tools they already use (spreadsheets, folders, "
+                    "browser tabs); name the real term once",
+    "advanced": "analogies from adjacent technical ideas (an index, a queue, a lockfile); "
+                "real terms freely",
+    "expert": "no analogies; precise terms, the mechanism, the trade-off, a source link",
 }
 
 BLOCKS = tuple(LEVEL_DEFAULTS["beginner"].keys())
@@ -68,7 +84,8 @@ BLOCK_MEANING = {
     "terms": "plain-language glossary for a term the user will meet again",
     "examples": "a concrete analogy or example when abstraction loses them",
     "steps": "numbered steps before doing multi-step work",
-    "research": "search the community / open-source for a wheel before hand-rolling",
+    "research": "run $wheel: find an existing tool/package/service before hand-rolling, "
+                "and tell the user if one exists",
     "confirm": "state what is irreversible and confirm before doing it",
     "humanize": "natural conversational tone, continuity, no robotic scaffolding",
 }
@@ -119,12 +136,28 @@ TURN_ON = re.compile(
     r"\bwhat is\b|\bexplain\b|\bteach me\b)", re.IGNORECASE)
 TURN_ON_BLOCK = "terms"
 
+# About to build something. The user rarely knows a wheel already exists, so this
+# turns `research` on for the turn instead of waiting for them to ask. A durable
+# `research off` still wins: they asked us to stop.
+BUILD = re.compile(
+    r"(?:寫|做|弄|建|架|開發)(?:一個|一支|一套|個|支|套)[^，。；\n]{0,8}?"
+    r"(?:程式|腳本|工具|網站|網頁|app|系統|bot|機器人|外掛|插件|套件|服務|功能|爬蟲|後台|介面|頁面|api)|"
+    r"自己(?:寫|做|刻|造)|從零(?:開始)?(?:寫|做)|自動化|"
+    r"\b(?:build|write|make|create|code)\s+(?:me\s+)?an?\s+(?:\w+\s+){0,3}?"
+    r"(?:app|tool|script|bot|scraper|site|website|service|plugin|extension|cli|api)\b|"
+    r"\bfrom scratch\b",
+    re.IGNORECASE)
+
 # "just do it" is a whole-register switch, not one block. Cheap to honour, and
 # the alternative is a beginner asking for terseness and still getting essays.
 JUST_CODE = re.compile(
     r"\bjust (?:code|the code|do it|answer)\b|"
     r"直接(?:給|說|做|講)(?:我)?(?:程式碼|代碼|重點|答案|結果)", re.IGNORECASE)
 JUST_CODE_BLOCKS = ("terms", "examples", "steps")
+
+# `!level expert`: the only way to change level from chat. Durable.
+LEVEL_MARKER = re.compile(r"!\s*level\s*(?:=\s*)?(beginner|intermediate|advanced|expert)\b",
+                          re.IGNORECASE)
 
 CN_TO_BLOCK = {
     "百科": "terms", "小百科": "terms", "術語": "terms", "解釋": "terms",
@@ -259,6 +292,10 @@ def parse_prompt(prompt, data=None):
         for b in JUST_CODE_BLOCKS:
             turn[b] = "off"
 
+    if BUILD.search(prompt) and pinned.get("research") != "off":
+        turn["research"] = "on"
+        notes.append("research -> on (about to build: run $wheel first)")
+
     for rx, state in ((TURN_OFF, "off"), (TURN_ON, "on")):
         for m in rx.finditer(prompt):
             name = TURN_ON_BLOCK if state == "on" else _block_of(m)
@@ -272,14 +309,21 @@ def resolve(prompt=None, data=None, persist=True, path=None):
     data = _blank(data) if data is not None else load(path)
     turn, durable, notes = parse_prompt(prompt, data)
 
-    if durable and persist:
+    lvl = LEVEL_MARKER.search(prompt or "") if isinstance(prompt, str) else None
+    if lvl and lvl.group(1).lower() != data["level"]:
+        notes.append("level -> %s (marker)" % lvl.group(1).lower())
+    if (durable or lvl) and persist:
         merged = _blank(data)
         merged["blocks"].update(durable)
+        if lvl:
+            merged["level"] = lvl.group(1).lower()
         try:
             save(merged, path)
             data = merged
         except Exception:
             notes.append("(could not write prefs file; change applies to this turn only)")
+    if lvl:  # applies this turn even if the write failed
+        data = dict(data, level=lvl.group(1).lower())
 
     states = {b: block_state(b, data) for b in BLOCKS}
     for name, st in turn.items():
@@ -295,7 +339,8 @@ def resolve(prompt=None, data=None, persist=True, path=None):
 
 def render_context(res):
     """The short block injected as UserPromptSubmit additionalContext."""
-    lines = ["[genie prefs] level=%s" % res["level"]]
+    lines = ["[genie prefs] level=%s" % res["level"],
+             "register: " + REGISTER.get(res["level"], REGISTER["beginner"])]
     if res["changes"]:
         lines.append("changed this message: " + "; ".join(res["changes"]))
     for name in BLOCKS:
@@ -311,7 +356,7 @@ def render_context(res):
 
 USAGE = """genie prefs
   (no args)                 show current settings
-  set level <l>             beginner | intermediate | advanced
+  set level <l>             beginner | intermediate | advanced | expert
   set <block> <state>       %s
   clear <block>             back to following your level
   reset                     forget everything

@@ -7,9 +7,13 @@ tools doing it means double warnings, contradictory tone, or one tool's denial
 masking the other's. So Genie does not fight: it notices, asks the user once who
 should own the job, and stands down on its side if the answer is "the other one".
 
-Detection is a cheap static scan, no network and no model:
-  - Codex hook commands in $CODEX_HOME/hooks.json
-  - skill directory names in ~/.agents/skills and $CODEX_HOME/skills
+Detection is a cheap static scan, no network and no model, of the host Genie
+runs in (Claude Code sets CLAUDE_PLUGIN_ROOT for plugin hooks):
+  - Codex: hook commands in $CODEX_HOME/hooks.json, skill dirs in
+    ~/.agents/skills and $CODEX_HOME/skills
+  - Claude Code: hook commands in ~/.claude/settings.json, skill dirs in
+    ~/.claude/skills (ponytail: other plugins' hooks are not read; add when a
+    plugin-shipped guard is seen in the wild)
 Anything that resolves into the Genie checkout itself is ignored.
 
 ponytail: name-signature matching, so an unrecognised tool with a bland name is
@@ -56,7 +60,23 @@ def codex_home():
     return os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")
 
 
+def on_claude():
+    return bool(os.environ.get("CLAUDE_PLUGIN_ROOT"))
+
+
+def hooks_file(home=None):
+    if home:
+        return os.path.join(home, "hooks.json")
+    if on_claude():
+        return os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"),
+                            "settings.json")
+    return os.path.join(codex_home(), "hooks.json")
+
+
 def skill_dirs():
+    if on_claude():
+        return [os.path.join(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"),
+                             "skills")]
     return [os.path.expanduser("~/.agents/skills"), os.path.join(codex_home(), "skills")]
 
 
@@ -78,9 +98,8 @@ def _name(text, rx):
 def scan(home=None, dirs=None):
     """-> {cap: sorted list of other tools}. Never raises."""
     found = {c: set() for c in CAPS}
-    home = home or codex_home()
     try:
-        with open(os.path.join(home, "hooks.json"), encoding="utf-8") as fh:
+        with open(hooks_file(home), encoding="utf-8") as fh:
             hooks = json.load(fh).get("hooks", {})
     except Exception:
         hooks = {}

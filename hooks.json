@@ -7,11 +7,6 @@
             "type": "command",
             "command": "python3 __GENIE_DIR__/router/genie_router.py",
             "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "python3 __GENIE_DIR__/router/prefs_hook.py",
-            "timeout": 5
           }
         ]
       }

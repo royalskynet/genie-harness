@@ -50,7 +50,7 @@
 | `steps` | 多步驟的事，先給路徑 |
 | `research` | 跑 `$wheel`：自己寫之前先找現成工具／套件。每一級預設都開（專家也值得先知道別人怎麼做）；`!research off` 關閉 |
 | `confirm` | 碰到不可逆的事，先講清楚再問 |
-| `humanize` | 自然對話語氣、上下文連貫、不假人味 |
+| `humanize` | 自然對話語氣、上下文連貫、不假人味、短句單義（借鏡 ASD-STE100） |
 
 **單次關閉：**「不用百科」／「直接給我程式碼」／`!terms off` — 只影響這一輪。
 **永久關閉：**「不要再給我百科了」／`!terms off` — 會記住並持續生效。
@@ -144,7 +144,7 @@ skills/
   wheel/                   動手前查 prior-art：官方文件＋社群共識＋成熟輪子 → 7 級裁決
   genie-explain/           使用者說看不懂：更短、更少術語、加比喻
   genie-execute/           可逆的一步做完，只停在不可逆那一步前面
-  genie-humanizer/         對話語氣、上下文連貫、不假人味
+  genie-humanizer/         對話語氣、上下文連貫、不假人味、短句單義
   genie-terms/             一次一個詞、白話、具體比喻
 hooks.json                 Codex hook 範本
 install.sh                 Codex 安裝器
@@ -254,7 +254,7 @@ Six independent blocks, each `on` / `auto` (only when needed) / `off`. `auto` is
 | `steps` | numbered steps before multi-step work |
 | `research` | run `$wheel`: find an existing tool/package before hand-rolling. On at every level (experts benefit from knowing prior art too); `!research off` to stop |
 | `confirm` | state what is irreversible and confirm before doing it |
-| `humanize` | natural conversational tone, continuity, no robotic scaffolding |
+| `humanize` | natural conversational tone, continuity, no robotic scaffolding, short unambiguous sentences (borrowed from ASD-STE100) |
 
 **Per-call opt-out:** "不用百科" / "直接給我程式碼" / `!terms off` — that turn only.
 **Durable:** "不要再給我百科了" / `!terms off` — persists until changed.
@@ -348,7 +348,7 @@ skills/
   wheel/                   prior-art before building: official docs + community consensus + mature repos → 7-level verdict
   genie-explain/           user says "don't get it": shorter, fewer terms, add an analogy
   genie-execute/           do the reversible steps in one go, stop before the irreversible one
-  genie-humanizer/         conversational tone, continuity, no fake-human decoration
+  genie-humanizer/         conversational tone, continuity, no fake-human decoration, one reading per sentence
   genie-terms/             one term, plain language, a concrete analogy
 hooks.json                 Codex hook template
 install.sh                 Codex installer

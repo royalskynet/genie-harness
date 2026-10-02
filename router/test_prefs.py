@@ -221,6 +221,21 @@ def test_context_mentions_the_boundary(fails):
         fails.append("injected context too long: %d lines" % len(text.splitlines()))
 
 
+def test_clarity_survives_level_and_style_handoff(fails):
+    """Misread = wrong action, so the clarity rule is not a verbosity preference:
+    it must reach expert (humanize off) and a caveman-owned style (humanize off)."""
+    rule = "one reading per sentence"
+    for lvl in prefs.LEVELS:
+        ctx = prefs.render_context(prefs.resolve("hi", data={"level": lvl}, persist=False))
+        eq(rule in ctx, True, "clarity injected at %s" % lvl, fails)
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "prefs.json")
+        res = prefs.resolve("!owner style=caveman !humanize off 好", path=path,
+                            found={"style": ["caveman"]})
+        eq(res["blocks"]["humanize"], "off", "humanize really off in this case", fails)
+        eq(rule in prefs.render_context(res), True, "clarity survives style handoff", fails)
+
+
 def test_blocks_cannot_disable_enforcement(fails):
     """B1. Every block off, a hostile prefs file, guard must still deny."""
     with tempfile.TemporaryDirectory() as td:

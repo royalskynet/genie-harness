@@ -102,13 +102,13 @@ BLOCK_MEANING = {
 # Hard-wired knowledge for the model, not a preference. Deliberately not tunable:
 # how a turn reads depends on what was asked, not on how much the user likes verbosity.
 ALWAYS = (
-    "answer in the user's language",
+    "answer in the user's language (Traditional Chinese: Taiwan terms, 軟體/程式/網路)",
     "ask only when a wrong guess would waste real work; batch every question into one message",
     "say plainly when you do not know",
     # ASD-STE100-style clarity, at every level and under any style tool: a misread
     # is a wrong action. Detail lives in genie-humanizer.
-    "one reading per sentence: short sentences, one action each, the same name for "
-    "the same thing, active voice, no vague verbs or quantities",
+    "one reading per sentence: short, one action each, one name per thing, active "
+    "voice, no vague words",
     "assume they cannot type commands or skill names: run skills and commands yourself",
 )
 

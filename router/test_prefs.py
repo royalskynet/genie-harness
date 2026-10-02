@@ -228,6 +228,7 @@ def test_clarity_survives_level_and_style_handoff(fails):
     for lvl in prefs.LEVELS:
         ctx = prefs.render_context(prefs.resolve("hi", data={"level": lvl}, persist=False))
         eq(rule in ctx, True, "clarity injected at %s" % lvl, fails)
+        eq("Taiwan terms" in ctx, True, "Taiwan vocabulary injected at %s" % lvl, fails)
     with tempfile.TemporaryDirectory() as td:
         path = os.path.join(td, "prefs.json")
         res = prefs.resolve("!owner style=caveman !humanize off 好", path=path,

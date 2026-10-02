@@ -1,208 +1,6 @@
 # Genie Harness
 
-> `## English` · `## 繁體中文`
-
----
-
-## English
-
-Make [Codex CLI](https://github.com/openai/codex) and [Claude Code](https://claude.com/claude-code) beginner-friendly. Free, local, CPU-only, no paid services, no GPU.
-
-```
-You type  →  Intent router (0.03–0.12s, ≤63 MB RAM)  →  Codex / Claude Code  →  plain-language short answers
-                 │
-                 ├─ genie: intent=build_request conf=high
-                 ├─ DO: your FIRST action this turn MUST be $wheel ...   ← the skill to run, named for the model
-                 └─ [genie prefs] level=beginner ...
-```
-
-### Why an intent router
-
-Assume the user is a complete beginner: they will never type `$wheel` or a slash command, and they do not know the skills exist. So every message is classified first, locally, by a tiny static embedding model (keywords are only a fast path), and the hook tells the model **which Genie skill to run this turn** in a `DO:` line. The model invokes it; the user just talks.
-
-The most important dispatch: once it is clear the user wants something built, the model **runs `wheel` first** (existing apps, services, built-in features, packages) and only then offers at most 3 options for the how, instead of guessing.
-In headless Claude Code runs (`claude -p --plugin-dir`), build requests invoked `genie-harness:wheel` as the first action 7/7 times (Sonnet 5/5, Haiku 2/2) once the DO line said "FIRST action ... MUST"; a softer "run wheel" was skipped 1 time in 4. Small sample, not a benchmark.
-
-Intent labels and what the `DO:` line dispatches:
-
-| Intent | Dispatch |
-|---|---|
-| `build_request` | wants something that does a job → **`$wheel` first**, then ≤3 options, wait for a pick |
-| `research_needed` | choosing a tool or answer depends on version/price → **`$wheel` first**: official docs + community consensus + mature repos |
-| `execute_request` | get something running → `$genie-execute`: do the reversible steps, stop before the irreversible one |
-| `clear_request` | small clear change → just do it |
-| `teach_me` | wants to learn → `$genie-explain` / `$genie-terms`, then check they understood |
-| `user_confused` | sounds lost → `$genie-explain`: simpler words, one analogy |
-| `risky_action` | destructive/irreversible → one plain sentence on what it does, wait for a yes |
-| `ambiguous_request` | goal unclear → one pick-list question; `$wheel` once the goal is clear |
-| `continue` | answering your last message ("ok", "the second one") → carry on, don't re-ask |
-| `unsure` | router abstained → ask one short question instead of guessing |
-
-### Blocks: graded verbosity, per-call opt-out
-
-Six independent blocks, each `on` / `auto` (only when needed) / `off`. `auto` is the default — the model judges whether a block earns its place.
-
-| Block | What it is |
-|---|---|
-| `terms` | plain-language glossary, one term max |
-| `examples` | a concrete analogy when abstraction loses them |
-| `steps` | numbered steps before multi-step work |
-| `research` | run `$wheel`: find an existing tool/package before hand-rolling. On at every level (experts benefit from knowing prior art too); `!research off` to stop |
-| `confirm` | state what is irreversible and confirm before doing it |
-| `humanize` | natural conversational tone, continuity, no robotic scaffolding |
-
-**Per-call opt-out:** "不用百科" / "直接給我程式碼" / `!terms off` — that turn only.
-**Durable:** "不要再給我百科了" / `!terms off` — persists until changed.
-**CLI:** `python3 router/prefs.py` (or `genie prefs`).
-
-**Levels** set the defaults and the analogy register (same length, different source of analogy). Switch with `!level <name>` in chat or `set level <name>`; pinned blocks survive.
-
-| Level | Glossary | Analogies | Steps | Analogies drawn from |
-|---|---|---|---|---|
-| `beginner` (default) | every new term | on | on | daily life |
-| `intermediate` | auto | auto | auto | tools they use (spreadsheets, folders) |
-| `advanced` | off | auto | off | adjacent tech (index, queue, lockfile) |
-| `expert` | off | off | off | none: mechanism, trade-off, source |
-
-**First run:** the first prompt after install makes Genie introduce itself in three lines and ask which level fits you. Answer `!level <name>` or in plain words.
-
-**Overlapping tools:** Genie is a whole-agent harness, not a security suite. When another installed tool does one of its jobs (`guard` command blocking, `research` prior-art search, `style` tone/verbosity), the installer lists it and the next prompt asks you once who owns that job, with a recommendation (for `guard`: the dedicated tool). Pick with `!owner <job>=<genie|tool>`. Genie stands down on that job while the other tool stays installed and takes it back if you uninstall it. Tools installed later are detected and asked about the same way.
-
-**Not blocks, and no preference can turn them off:** the catastrophic-command gate (`router/guard_dangerous.py`), Codex's sandbox and approval policy, and "say when you don't know". Turning off the nagging does not turn off the protection. For git, the gate also warns (never blocks) on the beginner mistakes that depend on repo state: discarding changes that were never committed, deleting stashes, `branch -D`, staging `.env`/key files, and making a repo public. It runs `git status` only when such a command appears, and a clean tree stays silent. The one exception is handing `guard` to another command guard that is actually installed as a PreToolUse hook; a prefs file alone cannot do it.
-
-### Claude Code (plugin)
-
-Inside Claude Code:
-
-```
-/plugin marketplace add royalskynet/genie-harness
-/plugin install genie-harness@genie-harness
-```
-
-Restart Claude Code. The plugin registers three hooks (SessionStart loads `AGENTS.md` and fetches the model on first use, UserPromptSubmit runs the intent router with `--host claude`, PreToolUse runs the guard on `Bash|Write|Edit|MultiEdit|NotebookEdit`) and the five skills as `genie-harness:<name>`. Needs Python 3.9+ and numpy. The first session downloads the intent model in the background into `~/.genie/model` (one time, ~512 MB → 35 MB, a few minutes); until it lands, the router tells the model to judge intent itself, still wheel-first. If numpy is missing, the model is told to offer installing it. Prefs live in `~/.genie/`, shared with Codex. Remove with `/plugin uninstall genie-harness`.
-
-### Codex: Quick Start (one-line install)
-
-```bash
-d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else git clone https://github.com/royalskynet/genie-harness "$d"; fi && bash "$d/install.sh"
-```
-
-Requirements: Codex CLI (hooks are stable), Python 3.9+, numpy. First run downloads ~512 MB of model data; after processing, ~35 MB on disk (58 MB RSS at runtime). If pip reports `externally-managed-environment` for Homebrew Python, install numpy in the user site with `python3 -m pip install --user --break-system-packages numpy`.
-
-**What install.sh touches (re-runs preserve the first `*.bak-genie` backup):**
-
-| Touch point | Change | Restore |
-|---|---|---|
-| `~/.agents/skills/{genie-*,wheel}` | 5 symlinks to this repo's `skills/`; existing same-name paths are moved to `.bak-genie` | Remove the five Genie symlinks listed below; restore any matching backup |
-| `~/.codex/hooks.json` | `UserPromptSubmit` (router, which also injects prefs) and `PreToolUse` (guard) entries added or refreshed; other hooks are kept | `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json` |
-| `~/.codex/config.toml` | the matching hook `trusted_hash` entries are added or refreshed | `mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml` |
-| `~/.codex/AGENTS.md` | this repo's AGENTS.md appended once, marker-guarded | `mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md` |
-
-An existing backup is never overwritten. If a same-name skill already has a `.bak-genie` path, installation stops before replacing any skill link; review or move that backup before retrying.
-
-Remove the installed Genie skill links, then restore any paths the installer backed up:
-
-```bash
-for name in genie-execute genie-explain genie-humanizer genie-terms wheel; do
-  link="$HOME/.agents/skills/$name"
-  backup="$link.bak-genie"
-  if [ -L "$link" ] && [[ "$(readlink "$link")" == */genie-harness/skills/"$name" ]]; then rm "$link"; fi
-  if { [ -e "$backup" ] || [ -L "$backup" ]; } && [ ! -e "$link" ] && [ ! -L "$link" ]; then mv "$backup" "$link"; fi
-done
-```
-
-On a repeated install, the installer refreshes the hook and symlinks if the repository moved, while preserving the first backups.
-
-The one-liner is safe to re-run: if `~/genie-harness` is already a clone it pulls instead of cloning, then re-runs install.sh. Already installed and only want the update:
-
-```bash
-bash ~/genie-harness/update.sh
-```
-
-install.sh also runs three smoke tests before declaring done: the guard must deny `rm -rf /`, the router must emit an intent, and the router's prefs section must force `terms` on when the user asks what something is. A hook that silently does nothing is worse than no hook.
-
-### Layout
-
-```
-AGENTS.md                  core behavior: speaking rules + tag table + block table
-router/
-  genie_router.py          the one UserPromptSubmit hook: classify → DO line (skill dispatch) → prefs. numpy only
-  intents.json             keywords & example sentences per intent (zh/en), thresholds here
-  prefs.py                 block resolution: level defaults, pins, per-call overrides
-  overlap.py               finds other installed tools doing guard / research / style
-  guard_dangerous.py       PreToolUse hook: deny catastrophic commands, warn on ambiguous ones
-  eval_set.json            87 hand-written dev cases (NOT a benchmark)
-  test_router.py           self-check: boundary cases + dev set, per-class, safe=100%, dispatch
-  test_prefs.py            self-check: 19 tests incl. blocks-cannot-disable-enforcement
-  test_guard.py            self-check: 49 deny + 4 warn rules + 5 git-state warns, 33 must-pass, write scan
-  test_repo.py             self-check: size budget, no hardcoded paths, hooks resolve, no drift
-  setup_model.py           one-time: download potion-multilingual-128M → trim vocab → int8
-skills/
-  wheel/                   prior-art before building: official docs + community consensus + mature repos → 7-level verdict
-  genie-explain/           user says "don't get it": shorter, fewer terms, add an analogy
-  genie-execute/           do the reversible steps in one go, stop before the irreversible one
-  genie-humanizer/         conversational tone, continuity, no fake-human decoration
-  genie-terms/             one term, plain language, a concrete analogy
-hooks.json                 Codex hook template
-install.sh                 Codex installer
-update.sh                  git pull --ff-only, then re-run install.sh
-.claude-plugin/            Claude Code plugin + marketplace manifests
-claude/                    Claude Code plugin hooks + SessionStart script
-```
-
-### Why this stack
-
-| Need | Choice | Rejected |
-|---|---|---|
-| Classification model | [model2vec](https://github.com/MinishLab/model2vec) `potion-multilingual-128M` (MIT, static embeddings, zh+en) | sentence-transformers (needs torch, hundreds of MB), local LLM (RAM / startup time) |
-| Runtime | no model2vec/tokenizers, numpy only: vocab trimmed to 110k + greedy longest-match + int8 rows mmap | full `tokenizers` with 500k vocab = 770 MB RAM, 0.4s |
-| Codex integration | official `UserPromptSubmit` + `PreToolUse` hooks | a CLI wrapper (one more thing to learn) |
-| Claude Code integration | official plugin (hooks + skills, one install); rules via SessionStart because a plugin's CLAUDE.md is not loaded | copying files into `~/.claude` by hand |
-| Skill activation | hook names the skill per turn (`DO:`) | relying on skill descriptions alone (~50% activation in public measurements) |
-| Behavior rules | AGENTS.md + Skills (Codex's official mechanism) | hand-rolled prompt injection |
-| Safety | regex gate as a speed bump + Codex sandbox/approval as the boundary | trusting a 7-way classifier to be the boundary |
-
-Measured (M4, Python 3.9): hook 0.03s / 13 MB on a keyword hit, 0.12s / 63 MB on the embedding path, all self-checks pass; trimmed-vocab vs official full tokenizer classify identically 10/10.
-
-### Measured accuracy (honest)
-
-`router/eval_set.json` is **87 hand-written cases, not a benchmark**. The labels are hand-judged, not derived from user logs. The score is a regression baseline for this repo, not evidence of generalisation.
-
-| Metric | Value |
-|---|---|
-| strict accuracy | 84/87 = 97% |
-| safe accuracy (correct or abstained) | 87/87 = 100% |
-| abstained | 3 |
-
-Per-class: `ambiguous_request` 6/7, `build_request` 10/10, `clear_request` 11/12, `continue` 4/4, `execute_request` 11/11, `research_needed` 10/11, `risky_action` 9/9, `teach_me` 16/16, `user_confused` 7/7.
-
-The class that must never be wrong is `risky_action` — a wrong label there means the model proceeds instead of asking. That is why the safe-accuracy number is the one that matters.
-
-### Tuning
-
-- Wrong classification: add a keyword (free, highest priority) or example sentence in `router/intents.json`, then `python3 router/test_router.py`.
-- See what class something lands in: `GENIE_DEBUG=1 python3 router/genie_router.py "your sentence"`.
-- Model missing/corrupt: stderr warning, and the `DO:` line hands intent judgment back to the model (still wheel-first) instead of dispatching a guessed label.
-- Block behaviour: `python3 router/prefs.py` to see current settings, `set level <l>` / `set <block> <state>` / `clear <block>` / `reset`.
-
-### Deliberately not done (MVP scope)
-
-- Conversation state (e.g. remembering the user was confused): left to AGENTS.md rules, no stored state.
-- Trained classifier: centroids + cosine is enough; reach for `model2vec[train]` only if accuracy demands.
-- Multi-language UI: AGENTS.md is Traditional Chinese; swap one file to change the language.
-- Project-level prefs: `~/.genie/prefs.json` is user-level only. A project override is a reasonable future addition.
-
-### Known gaps
-
-- `rm -rf ~/Documents` is warned, not denied. There is no reliable way to tell a project checkout from personal data, and inventing a fuzzy heuristic would block real work. Codex's sandbox and approval are the boundary here.
-- The guard is a regex speed bump, not a security boundary. It catches the obvious catastrophic commands; it does not catch everything. The boundary is Codex's sandbox + approval.
-- Claude Code: the overlapping-tool scan (`overlap.py`) reads `~/.claude/settings.json` hooks and `~/.claude/skills`, but not hooks shipped inside other plugins; such a guard is not detected and both run.
-- Codex plugin manifest (`.codex-plugin/`) is not shipped; Codex installs via `install.sh`.
-- `PREMORTEM.md` lists 30 predicted failure modes and the countermeasure for each.
-
-### License
-
-MIT — see [LICENSE](LICENSE). Copyright 2026 royalskynet.
+> `## 繁體中文` · `## English`
 
 ---
 
@@ -282,7 +80,7 @@ MIT — see [LICENSE](LICENSE). Copyright 2026 royalskynet.
 /plugin install genie-harness@genie-harness
 ```
 
-重開 Claude Code。plugin 會註冊三個 hook（SessionStart 載入 `AGENTS.md`、第一次時下載模型，UserPromptSubmit 跑意圖路由 `--host claude`、PreToolUse 在 `Bash|Write|Edit|MultiEdit|NotebookEdit` 上跑閘門），五個 skill 以 `genie-harness:<名稱>` 出現。需要 Python 3.9+ 和 numpy。第一次開 session 會在背景把意圖模型下載到 `~/.genie/model`（只一次，~512 MB → 35 MB，幾分鐘）；下載完成前，router 會請模型自己判斷意圖，一樣先跑 wheel。缺 numpy 時，模型會被告知要主動提議幫他裝。偏好設定存在 `~/.genie/`，跟 Codex 共用。移除：`/plugin uninstall genie-harness`。
+重開 Claude Code。plugin 會註冊三個 hook（SessionStart 載入 `AGENTS.md`、第一次時下載模型，UserPromptSubmit 跑意圖路由 `--host claude`、PreToolUse 在 `Bash|Write|Edit|MultiEdit|NotebookEdit` 上跑閘門），五個 skill 以 `genie-harness:<名稱>` 出現。需要 Python 3.9+ 和 numpy。第一次開 session 會在背景把意圖模型下載到 `~/.genie/model`（只一次，~512 MB → 35 MB，幾分鐘）；下載完成前，router 會請模型自己判斷意圖，一樣先跑 wheel。缺 numpy 時，模型會被告知要主動提議幫他裝。偏好設定存在 `~/.genie/`，跟 Codex 共用。更新：`/plugin marketplace update genie-harness` 後 `/plugin update genie-harness@genie-harness`（或在 `/plugin` 介面點更新），重開 Claude Code 才生效。模型在 plugin 目錄外，更新不會重新下載。移除：`/plugin uninstall genie-harness`。
 
 ### Codex：一鍵安裝（Quick Start）
 
@@ -297,6 +95,8 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else gi
 ```bash
 bash ~/genie-harness/update.sh
 ```
+
+更新不會重新下載模型：`router/model/` 在 `.gitignore` 裡，pull 不動它；install.sh 看到模型已在就跳過下載。偏好設定（`~/.genie/`）也會保留。
 
 **install.sh 會動四處（重跑時保留第一次建立的 `*.bak-genie` 備份）：**
 
@@ -406,3 +206,207 @@ Per-class：`ambiguous_request` 6/7、`build_request` 10/10、`clear_request` 11
 ### License
 
 MIT — 見 [LICENSE](LICENSE)。Copyright 2026 royalskynet。
+
+---
+
+## English
+
+Make [Codex CLI](https://github.com/openai/codex) and [Claude Code](https://claude.com/claude-code) beginner-friendly. Free, local, CPU-only, no paid services, no GPU.
+
+```
+You type  →  Intent router (0.03–0.12s, ≤63 MB RAM)  →  Codex / Claude Code  →  plain-language short answers
+                 │
+                 ├─ genie: intent=build_request conf=high
+                 ├─ DO: your FIRST action this turn MUST be $wheel ...   ← the skill to run, named for the model
+                 └─ [genie prefs] level=beginner ...
+```
+
+### Why an intent router
+
+Assume the user is a complete beginner: they will never type `$wheel` or a slash command, and they do not know the skills exist. So every message is classified first, locally, by a tiny static embedding model (keywords are only a fast path), and the hook tells the model **which Genie skill to run this turn** in a `DO:` line. The model invokes it; the user just talks.
+
+The most important dispatch: once it is clear the user wants something built, the model **runs `wheel` first** (existing apps, services, built-in features, packages) and only then offers at most 3 options for the how, instead of guessing.
+In headless Claude Code runs (`claude -p --plugin-dir`), build requests invoked `genie-harness:wheel` as the first action 7/7 times (Sonnet 5/5, Haiku 2/2) once the DO line said "FIRST action ... MUST"; a softer "run wheel" was skipped 1 time in 4. Small sample, not a benchmark.
+
+Intent labels and what the `DO:` line dispatches:
+
+| Intent | Dispatch |
+|---|---|
+| `build_request` | wants something that does a job → **`$wheel` first**, then ≤3 options, wait for a pick |
+| `research_needed` | choosing a tool or answer depends on version/price → **`$wheel` first**: official docs + community consensus + mature repos |
+| `execute_request` | get something running → `$genie-execute`: do the reversible steps, stop before the irreversible one |
+| `clear_request` | small clear change → just do it |
+| `teach_me` | wants to learn → `$genie-explain` / `$genie-terms`, then check they understood |
+| `user_confused` | sounds lost → `$genie-explain`: simpler words, one analogy |
+| `risky_action` | destructive/irreversible → one plain sentence on what it does, wait for a yes |
+| `ambiguous_request` | goal unclear → one pick-list question; `$wheel` once the goal is clear |
+| `continue` | answering your last message ("ok", "the second one") → carry on, don't re-ask |
+| `unsure` | router abstained → ask one short question instead of guessing |
+
+### Blocks: graded verbosity, per-call opt-out
+
+Six independent blocks, each `on` / `auto` (only when needed) / `off`. `auto` is the default — the model judges whether a block earns its place.
+
+| Block | What it is |
+|---|---|
+| `terms` | plain-language glossary, one term max |
+| `examples` | a concrete analogy when abstraction loses them |
+| `steps` | numbered steps before multi-step work |
+| `research` | run `$wheel`: find an existing tool/package before hand-rolling. On at every level (experts benefit from knowing prior art too); `!research off` to stop |
+| `confirm` | state what is irreversible and confirm before doing it |
+| `humanize` | natural conversational tone, continuity, no robotic scaffolding |
+
+**Per-call opt-out:** "不用百科" / "直接給我程式碼" / `!terms off` — that turn only.
+**Durable:** "不要再給我百科了" / `!terms off` — persists until changed.
+**CLI:** `python3 router/prefs.py` (or `genie prefs`).
+
+**Levels** set the defaults and the analogy register (same length, different source of analogy). Switch with `!level <name>` in chat or `set level <name>`; pinned blocks survive.
+
+| Level | Glossary | Analogies | Steps | Analogies drawn from |
+|---|---|---|---|---|
+| `beginner` (default) | every new term | on | on | daily life |
+| `intermediate` | auto | auto | auto | tools they use (spreadsheets, folders) |
+| `advanced` | off | auto | off | adjacent tech (index, queue, lockfile) |
+| `expert` | off | off | off | none: mechanism, trade-off, source |
+
+**First run:** the first prompt after install makes Genie introduce itself in three lines and ask which level fits you. Answer `!level <name>` or in plain words.
+
+**Overlapping tools:** Genie is a whole-agent harness, not a security suite. When another installed tool does one of its jobs (`guard` command blocking, `research` prior-art search, `style` tone/verbosity), the installer lists it and the next prompt asks you once who owns that job, with a recommendation (for `guard`: the dedicated tool). Pick with `!owner <job>=<genie|tool>`. Genie stands down on that job while the other tool stays installed and takes it back if you uninstall it. Tools installed later are detected and asked about the same way.
+
+**Not blocks, and no preference can turn them off:** the catastrophic-command gate (`router/guard_dangerous.py`), Codex's sandbox and approval policy, and "say when you don't know". Turning off the nagging does not turn off the protection. For git, the gate also warns (never blocks) on the beginner mistakes that depend on repo state: discarding changes that were never committed, deleting stashes, `branch -D`, staging `.env`/key files, and making a repo public. It runs `git status` only when such a command appears, and a clean tree stays silent. The one exception is handing `guard` to another command guard that is actually installed as a PreToolUse hook; a prefs file alone cannot do it.
+
+### Claude Code (plugin)
+
+Inside Claude Code:
+
+```
+/plugin marketplace add royalskynet/genie-harness
+/plugin install genie-harness@genie-harness
+```
+
+Restart Claude Code. The plugin registers three hooks (SessionStart loads `AGENTS.md` and fetches the model on first use, UserPromptSubmit runs the intent router with `--host claude`, PreToolUse runs the guard on `Bash|Write|Edit|MultiEdit|NotebookEdit`) and the five skills as `genie-harness:<name>`. Needs Python 3.9+ and numpy. The first session downloads the intent model in the background into `~/.genie/model` (one time, ~512 MB → 35 MB, a few minutes); until it lands, the router tells the model to judge intent itself, still wheel-first. If numpy is missing, the model is told to offer installing it. Prefs live in `~/.genie/`, shared with Codex. Update with `/plugin marketplace update genie-harness` then `/plugin update genie-harness@genie-harness` (or from the `/plugin` UI), then restart Claude Code; the model lives outside the plugin directory, so it is not downloaded again. Remove with `/plugin uninstall genie-harness`.
+
+### Codex: Quick Start (one-line install)
+
+```bash
+d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else git clone https://github.com/royalskynet/genie-harness "$d"; fi && bash "$d/install.sh"
+```
+
+Requirements: Codex CLI (hooks are stable), Python 3.9+, numpy. First run downloads ~512 MB of model data; after processing, ~35 MB on disk (58 MB RSS at runtime). If pip reports `externally-managed-environment` for Homebrew Python, install numpy in the user site with `python3 -m pip install --user --break-system-packages numpy`.
+
+**What install.sh touches (re-runs preserve the first `*.bak-genie` backup):**
+
+| Touch point | Change | Restore |
+|---|---|---|
+| `~/.agents/skills/{genie-*,wheel}` | 5 symlinks to this repo's `skills/`; existing same-name paths are moved to `.bak-genie` | Remove the five Genie symlinks listed below; restore any matching backup |
+| `~/.codex/hooks.json` | `UserPromptSubmit` (router, which also injects prefs) and `PreToolUse` (guard) entries added or refreshed; other hooks are kept | `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json` |
+| `~/.codex/config.toml` | the matching hook `trusted_hash` entries are added or refreshed | `mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml` |
+| `~/.codex/AGENTS.md` | this repo's AGENTS.md appended once, marker-guarded | `mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md` |
+
+An existing backup is never overwritten. If a same-name skill already has a `.bak-genie` path, installation stops before replacing any skill link; review or move that backup before retrying.
+
+Remove the installed Genie skill links, then restore any paths the installer backed up:
+
+```bash
+for name in genie-execute genie-explain genie-humanizer genie-terms wheel; do
+  link="$HOME/.agents/skills/$name"
+  backup="$link.bak-genie"
+  if [ -L "$link" ] && [[ "$(readlink "$link")" == */genie-harness/skills/"$name" ]]; then rm "$link"; fi
+  if { [ -e "$backup" ] || [ -L "$backup" ]; } && [ ! -e "$link" ] && [ ! -L "$link" ]; then mv "$backup" "$link"; fi
+done
+```
+
+On a repeated install, the installer refreshes the hook and symlinks if the repository moved, while preserving the first backups.
+
+The one-liner is safe to re-run: if `~/genie-harness` is already a clone it pulls instead of cloning, then re-runs install.sh. Already installed and only want the update:
+
+```bash
+bash ~/genie-harness/update.sh
+```
+
+Updating does not download the model again: `router/model/` is gitignored, so the pull leaves it alone, and install.sh skips the download when the model is already there. Prefs (`~/.genie/`) are kept.
+
+install.sh also runs three smoke tests before declaring done: the guard must deny `rm -rf /`, the router must emit an intent, and the router's prefs section must force `terms` on when the user asks what something is. A hook that silently does nothing is worse than no hook.
+
+### Layout
+
+```
+AGENTS.md                  core behavior: speaking rules + tag table + block table
+router/
+  genie_router.py          the one UserPromptSubmit hook: classify → DO line (skill dispatch) → prefs. numpy only
+  intents.json             keywords & example sentences per intent (zh/en), thresholds here
+  prefs.py                 block resolution: level defaults, pins, per-call overrides
+  overlap.py               finds other installed tools doing guard / research / style
+  guard_dangerous.py       PreToolUse hook: deny catastrophic commands, warn on ambiguous ones
+  eval_set.json            87 hand-written dev cases (NOT a benchmark)
+  test_router.py           self-check: boundary cases + dev set, per-class, safe=100%, dispatch
+  test_prefs.py            self-check: 19 tests incl. blocks-cannot-disable-enforcement
+  test_guard.py            self-check: 49 deny + 4 warn rules + 5 git-state warns, 33 must-pass, write scan
+  test_repo.py             self-check: size budget, no hardcoded paths, hooks resolve, no drift
+  setup_model.py           one-time: download potion-multilingual-128M → trim vocab → int8
+skills/
+  wheel/                   prior-art before building: official docs + community consensus + mature repos → 7-level verdict
+  genie-explain/           user says "don't get it": shorter, fewer terms, add an analogy
+  genie-execute/           do the reversible steps in one go, stop before the irreversible one
+  genie-humanizer/         conversational tone, continuity, no fake-human decoration
+  genie-terms/             one term, plain language, a concrete analogy
+hooks.json                 Codex hook template
+install.sh                 Codex installer
+update.sh                  git pull --ff-only, then re-run install.sh
+.claude-plugin/            Claude Code plugin + marketplace manifests
+claude/                    Claude Code plugin hooks + SessionStart script
+```
+
+### Why this stack
+
+| Need | Choice | Rejected |
+|---|---|---|
+| Classification model | [model2vec](https://github.com/MinishLab/model2vec) `potion-multilingual-128M` (MIT, static embeddings, zh+en) | sentence-transformers (needs torch, hundreds of MB), local LLM (RAM / startup time) |
+| Runtime | no model2vec/tokenizers, numpy only: vocab trimmed to 110k + greedy longest-match + int8 rows mmap | full `tokenizers` with 500k vocab = 770 MB RAM, 0.4s |
+| Codex integration | official `UserPromptSubmit` + `PreToolUse` hooks | a CLI wrapper (one more thing to learn) |
+| Claude Code integration | official plugin (hooks + skills, one install); rules via SessionStart because a plugin's CLAUDE.md is not loaded | copying files into `~/.claude` by hand |
+| Skill activation | hook names the skill per turn (`DO:`) | relying on skill descriptions alone (~50% activation in public measurements) |
+| Behavior rules | AGENTS.md + Skills (Codex's official mechanism) | hand-rolled prompt injection |
+| Safety | regex gate as a speed bump + Codex sandbox/approval as the boundary | trusting a 7-way classifier to be the boundary |
+
+Measured (M4, Python 3.9): hook 0.03s / 13 MB on a keyword hit, 0.12s / 63 MB on the embedding path, all self-checks pass; trimmed-vocab vs official full tokenizer classify identically 10/10.
+
+### Measured accuracy (honest)
+
+`router/eval_set.json` is **87 hand-written cases, not a benchmark**. The labels are hand-judged, not derived from user logs. The score is a regression baseline for this repo, not evidence of generalisation.
+
+| Metric | Value |
+|---|---|
+| strict accuracy | 84/87 = 97% |
+| safe accuracy (correct or abstained) | 87/87 = 100% |
+| abstained | 3 |
+
+Per-class: `ambiguous_request` 6/7, `build_request` 10/10, `clear_request` 11/12, `continue` 4/4, `execute_request` 11/11, `research_needed` 10/11, `risky_action` 9/9, `teach_me` 16/16, `user_confused` 7/7.
+
+The class that must never be wrong is `risky_action` — a wrong label there means the model proceeds instead of asking. That is why the safe-accuracy number is the one that matters.
+
+### Tuning
+
+- Wrong classification: add a keyword (free, highest priority) or example sentence in `router/intents.json`, then `python3 router/test_router.py`.
+- See what class something lands in: `GENIE_DEBUG=1 python3 router/genie_router.py "your sentence"`.
+- Model missing/corrupt: stderr warning, and the `DO:` line hands intent judgment back to the model (still wheel-first) instead of dispatching a guessed label.
+- Block behaviour: `python3 router/prefs.py` to see current settings, `set level <l>` / `set <block> <state>` / `clear <block>` / `reset`.
+
+### Deliberately not done (MVP scope)
+
+- Conversation state (e.g. remembering the user was confused): left to AGENTS.md rules, no stored state.
+- Trained classifier: centroids + cosine is enough; reach for `model2vec[train]` only if accuracy demands.
+- Multi-language UI: AGENTS.md is Traditional Chinese; swap one file to change the language.
+- Project-level prefs: `~/.genie/prefs.json` is user-level only. A project override is a reasonable future addition.
+
+### Known gaps
+
+- `rm -rf ~/Documents` is warned, not denied. There is no reliable way to tell a project checkout from personal data, and inventing a fuzzy heuristic would block real work. Codex's sandbox and approval are the boundary here.
+- The guard is a regex speed bump, not a security boundary. It catches the obvious catastrophic commands; it does not catch everything. The boundary is Codex's sandbox + approval.
+- Claude Code: the overlapping-tool scan (`overlap.py`) reads `~/.claude/settings.json` hooks and `~/.claude/skills`, but not hooks shipped inside other plugins; such a guard is not detected and both run.
+- Codex plugin manifest (`.codex-plugin/`) is not shipped; Codex installs via `install.sh`.
+- `PREMORTEM.md` lists 30 predicted failure modes and the countermeasure for each.
+
+### License
+
+MIT — see [LICENSE](LICENSE). Copyright 2026 royalskynet.

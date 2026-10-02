@@ -13,6 +13,7 @@
 ### 1. 安全閘（`router/guard_dangerous.py`）
 - PreToolUse hook，擋災難指令（deny）與模糊指令（warn）
 - 49 deny + 4 warn 規則，33 must-pass，5 file rules，6 write-blocked，6 write-allowed
+- git 狀態警告 5 條（`inspect_git`）：未存檔時丟棄改動、刪 stash、`branch -D`、把 .env/金鑰加進 git、repo 設公開。只在指令吻合時才跑 `git status`；乾淨工作區不吵，在暫存 repo 實測
 - 掃寫入腳本內容（A1：防「寫腳本再執行」繞過）
 - 替代動詞規則（A2：git clean -fdx、shutil.rmtree、mv /dev/null、find -delete 等）
 - 逃生門 `GENIE_ALLOW_DANGEROUS=1` 寫 audit log（A7）
@@ -23,7 +24,7 @@
 - 6 個三態區塊（terms/examples/steps/research/confirm/humanize）
 - level 預設層（beginner/intermediate/advanced/expert）＋每級 register（比喻來源），不覆蓋使用者 pin；`!level <l>` 可在對話切換
 - 首次啟動（無 prefs.json）注入 FIRST RUN：自我介紹＋問等級；research 每級預設 on
-- `router/overlap.py` 掃 hooks.json＋skills 目錄找撞功能工具（guard/research/style），問一次交給誰（`!owner`），只在對方工具仍安裝時生效；guard 交出需該工具真的是 PreToolUse hook
+- `router/overlap.py` 依宿主掃 hooks（Codex `hooks.json`／Claude Code `settings.json`）＋skills 目錄找撞功能工具（guard/research/style），問一次交給誰（`!owner`），只在對方工具仍安裝時生效；guard 交出需該工具真的是 PreToolUse hook
 - 單次覆寫（`!terms off`、`不用百科`）與永久關閉（`不要再給我百科了`）
 - 問「什麼是 X」時強制 on，不管設定
 - 原子寫入、壞檔退回預設、hostile key 忽略

@@ -68,7 +68,7 @@ Six independent blocks, each `on` / `auto` (only when needed) / `off`. `auto` is
 
 **Overlapping tools:** Genie is a whole-agent harness, not a security suite. When another installed tool does one of its jobs (`guard` command blocking, `research` prior-art search, `style` tone/verbosity), the installer lists it and the next prompt asks you once who owns that job, with a recommendation (for `guard`: the dedicated tool). Pick with `!owner <job>=<genie|tool>`. Genie stands down on that job while the other tool stays installed and takes it back if you uninstall it. Tools installed later are detected and asked about the same way.
 
-**Not blocks, and no preference can turn them off:** the catastrophic-command gate (`router/guard_dangerous.py`), Codex's sandbox and approval policy, and "say when you don't know". Turning off the nagging does not turn off the protection. The one exception is handing `guard` to another command guard that is actually installed as a PreToolUse hook; a prefs file alone cannot do it.
+**Not blocks, and no preference can turn them off:** the catastrophic-command gate (`router/guard_dangerous.py`), Codex's sandbox and approval policy, and "say when you don't know". Turning off the nagging does not turn off the protection. For git, the gate also warns (never blocks) on the beginner mistakes that depend on repo state: discarding changes that were never committed, deleting stashes, `branch -D`, staging `.env`/key files, and making a repo public. It runs `git status` only when such a command appears, and a clean tree stays silent. The one exception is handing `guard` to another command guard that is actually installed as a PreToolUse hook; a prefs file alone cannot do it.
 
 ### Claude Code (plugin)
 
@@ -134,7 +134,7 @@ router/
   eval_set.json            87 hand-written dev cases (NOT a benchmark)
   test_router.py           self-check: boundary cases + dev set, per-class, safe=100%, dispatch
   test_prefs.py            self-check: 19 tests incl. blocks-cannot-disable-enforcement
-  test_guard.py            self-check: 49 deny + 4 warn rules, 33 must-pass, write scan
+  test_guard.py            self-check: 49 deny + 4 warn rules + 5 git-state warns, 33 must-pass, write scan
   test_repo.py             self-check: size budget, no hardcoded paths, hooks resolve, no drift
   setup_model.py           one-time: download potion-multilingual-128M → trim vocab → int8
 skills/
@@ -196,7 +196,7 @@ The class that must never be wrong is `risky_action` — a wrong label there mea
 
 - `rm -rf ~/Documents` is warned, not denied. There is no reliable way to tell a project checkout from personal data, and inventing a fuzzy heuristic would block real work. Codex's sandbox and approval are the boundary here.
 - The guard is a regex speed bump, not a security boundary. It catches the obvious catastrophic commands; it does not catch everything. The boundary is Codex's sandbox + approval.
-- Claude Code: the overlapping-tool scan (`overlap.py`) only reads Codex config, so another guard installed as a Claude Code plugin is not detected; both run.
+- Claude Code: the overlapping-tool scan (`overlap.py`) reads `~/.claude/settings.json` hooks and `~/.claude/skills`, but not hooks shipped inside other plugins; such a guard is not detected and both run.
 - Codex plugin manifest (`.codex-plugin/`) is not shipped; Codex installs via `install.sh`.
 - `PREMORTEM.md` lists 30 predicted failure modes and the countermeasure for each.
 
@@ -271,7 +271,7 @@ MIT — see [LICENSE](LICENSE). Copyright 2026 royalskynet.
 
 **跟其他套件撞功能：** Genie 是整個 agent 的 harness，不是專門的安全套件。另一個已裝工具也在做它的某件事時（`guard` 擋危險指令、`research` 找輪子、`style` 語氣詳略），安裝程式會列出來，下一則訊息問你一次交給誰，並附建議（`guard` 建議交給專門工具）。用 `!owner <事>=<genie|工具名>` 選。交出去的那件事 Genie 就不做；那個工具被移除，Genie 自動接回。之後才裝的工具也會被偵測、一樣問一次。
 
-**不是區塊，任何偏好設定都關不掉：** 災難指令閘門（`router/guard_dangerous.py`）、宿主的權限層（Codex 的 sandbox 與 approval、Claude Code 的權限確認）、以及「不確定就說不確定」。關掉提醒不等於關掉保護。唯一例外是把 `guard` 交給另一個**真的裝成 PreToolUse hook** 的指令守門工具；只改設定檔做不到。
+**不是區塊，任何偏好設定都關不掉：** 災難指令閘門（`router/guard_dangerous.py`）、宿主的權限層（Codex 的 sandbox 與 approval、Claude Code 的權限確認）、以及「不確定就說不確定」。關掉提醒不等於關掉保護。git 方面還會對新手常踩、要看 repo 狀態才算危險的操作發警告（只警告不擋）：丟掉還沒 commit 的改動、刪 stash、`branch -D`、把 `.env`／金鑰檔加進 git、把 repo 設成公開。只有出現這類指令才跑 `git status`，工作區乾淨就不吵。唯一例外是把 `guard` 交給另一個**真的裝成 PreToolUse hook** 的指令守門工具；只改設定檔做不到。
 
 ### Claude Code（plugin）
 
@@ -337,7 +337,7 @@ router/
   eval_set.json            87 句手寫 dev 語料（不是 benchmark）
   test_router.py           自檢：邊界案例 + dev 語料，per-class，safe=100%，派工
   test_prefs.py            自檢：19 項，含「關區塊不能關安全」
-  test_guard.py            自檢：49 deny + 4 warn、33 must-pass、寫入掃描
+  test_guard.py            自檢：49 deny + 4 warn + 5 git 狀態警告、33 must-pass、寫入掃描
   test_repo.py             自檢：大小預算、無絕對路徑、hook 指向存在、不漂移
   setup_model.py           一次性：下載 potion-multilingual-128M → 修剪詞表 → int8
 skills/
@@ -399,7 +399,7 @@ Per-class：`ambiguous_request` 6/7、`build_request` 10/10、`clear_request` 11
 
 - `rm -rf ~/Documents` 是警告，不是擋下。無法可靠區分專案資料夾和個人資料，硬猜會擋掉真正的工作。這裡的邊界是 Codex 的 sandbox 與 approval。
 - 閘門是正則減速帶，不是安全邊界。它抓明顯的災難指令，但不是全部。邊界是 Codex 的 sandbox + approval。
-- Claude Code：重複工具偵測（`overlap.py`）只讀 Codex 的設定，另一個以 Claude Code plugin 安裝的閘門偵測不到，兩個會同時跑。
+- Claude Code：重複工具偵測（`overlap.py`）會讀 `~/.claude/settings.json` 的 hooks 和 `~/.claude/skills`，但不讀其他 plugin 內建的 hooks；那種閘門偵測不到，兩個會同時跑。
 - 沒附 Codex plugin manifest（`.codex-plugin/`）；Codex 走 `install.sh` 安裝。
 - `PREMORTEM.md` 列出 30 條預測失效模式與各自的預防設計。
 

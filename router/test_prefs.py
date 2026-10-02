@@ -320,6 +320,24 @@ def test_overlap_scan_ignores_genie(fails):
            "own files ignored; only PreToolUse counts as a guard", fails)
 
 
+def test_overlap_scan_claude_host(fails):
+    """Under Claude Code the scan reads ~/.claude, not the Codex config."""
+    with tempfile.TemporaryDirectory() as td:
+        os.makedirs(os.path.join(td, "skills", "dont-reinvent"))
+        with open(os.path.join(td, "settings.json"), "w") as fh:
+            json.dump({"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [
+                {"type": "command", "command": "dcg"}]}]}}, fh)
+        old = {k: os.environ.get(k) for k in ("CLAUDE_PLUGIN_ROOT", "CLAUDE_CONFIG_DIR")}
+        os.environ.update(CLAUDE_PLUGIN_ROOT=overlap.GENIE_DIR, CLAUDE_CONFIG_DIR=td)
+        try:
+            got = _real_scan()
+        finally:
+            for k, v in old.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        eq(got, {"guard": ["dcg"], "research": ["dont-reinvent"]},
+           "claude host: settings.json hooks + ~/.claude/skills", fails)
+
+
 def test_hook_shape_and_fail_open(fails):
     with tempfile.TemporaryDirectory() as td:
         path = os.path.join(td, "prefs.json")

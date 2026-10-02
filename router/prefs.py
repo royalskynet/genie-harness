@@ -93,7 +93,7 @@ BLOCK_MEANING = {
     "terms": "plain-language glossary for a term the user will meet again",
     "examples": "a concrete analogy or example when abstraction loses them",
     "steps": "numbered steps before doing multi-step work",
-    "research": "run $wheel: find an existing tool/package/service before hand-rolling, "
+    "research": "run wheel: find an existing tool/package/service before hand-rolling, "
                 "and tell the user if one exists",
     "confirm": "state what is irreversible and confirm before doing it",
     "humanize": "natural conversational tone, continuity, no robotic scaffolding",
@@ -105,7 +105,11 @@ ALWAYS = (
     "answer in the user's language",
     "ask only when a wrong guess would waste real work; batch every question into one message",
     "say plainly when you do not know",
+    "assume they cannot type commands or skill names: run skills and commands yourself",
 )
+
+# The host's own permission layer, named in the injected context.
+HOST_GUARD = {"codex": "Codex sandbox/approval", "claude": "Claude Code permission prompts"}
 
 # --- parsers ---------------------------------------------------------------
 
@@ -327,9 +331,9 @@ def parse_prompt(prompt, data=None):
         for b in JUST_CODE_BLOCKS:
             turn[b] = "off"
 
-    if BUILD.search(prompt) and pinned.get("research") != "off":
+    if BUILD.search(prompt) and "off" not in (pinned.get("research"), durable.get("research")):
         turn["research"] = "on"
-        notes.append("research -> on (about to build: run $wheel first)")
+        notes.append("research -> on (about to build: run wheel first)")
 
     for rx, state in ((TURN_OFF, "off"), (TURN_ON, "on")):
         for m in rx.finditer(prompt):
@@ -427,7 +431,7 @@ ONBOARDING = (
     "on plain words run `%s set level <l>`. Then answer their message." % CLI)
 
 
-def render_context(res):
+def render_context(res, host="codex"):
     """The short block injected as UserPromptSubmit additionalContext."""
     handed = res.get("handed_off", {})
     lines = ["[genie prefs] level=%s" % res["level"]]
@@ -459,11 +463,11 @@ def render_context(res):
     lines.append("not preference-tunable, always on: " + "; ".join(ALWAYS))
     if handed.get("guard"):
         lines.append("catastrophic-command gate: handed to %s by the user; Genie's guard "
-                     "stands down while %s is installed. Codex sandbox/approval still apply."
-                     % (handed["guard"], handed["guard"]))
+                     "stands down while %s is installed. %s still apply."
+                     % (handed["guard"], handed["guard"], HOST_GUARD.get(host, HOST_GUARD["codex"])))
     else:
         lines.append("NOT blocks, and no preference can turn them off: the "
-                     "catastrophic-command gate, and Codex sandbox/approval.")
+                     "catastrophic-command gate, and %s." % HOST_GUARD.get(host, HOST_GUARD["codex"]))
     return "\n".join(lines)
 
 

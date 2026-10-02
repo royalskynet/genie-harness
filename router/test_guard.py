@@ -10,6 +10,7 @@ Two halves and both matter equally:
 import json
 import os
 import subprocess
+import tempfile
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -185,8 +186,44 @@ def run(payload, env=None):
     e = dict(os.environ)
     if env:
         e.update(env)
-    p = subprocess.run([sys.executable, GUARD], input=payload, capture_output=True, text=True, env=e)
+    # neutral cwd: git-state warnings must not depend on this repo being dirty
+    p = subprocess.run([sys.executable, GUARD], input=payload, capture_output=True, text=True,
+                       env=e, cwd=tempfile.gettempdir())
     return p
+
+
+def check_git_state():
+    """Beginner git footguns: warn depends on repo state, so test real repos."""
+    fails = []
+    with tempfile.TemporaryDirectory() as d:
+        g = lambda *a: subprocess.run(["git", "-C", d, *a], capture_output=True)
+        g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t")
+        open(os.path.join(d, "a.txt"), "w").write("1")
+        g("add", "."); g("commit", "-qm", "init")
+
+        def warned(cmd):
+            p = run(json.dumps({"tool_name": "Bash", "cwd": d, "tool_input": {"command": cmd}}))
+            return bool(p.stdout.strip())
+        # clean tree: discarding loses nothing -> silent
+        for cmd in ["git reset --hard", "git checkout -- .", "git restore a.txt", "git add a.txt"]:
+            if warned(cmd):
+                fails.append("GIT FALSE ALARM (clean): %r" % cmd)
+        open(os.path.join(d, "a.txt"), "w").write("2")  # unsaved edit
+        for cmd in ["git reset --hard HEAD", "git checkout -- a.txt", "git restore ."]:
+            if not warned(cmd):
+                fails.append("GIT DIRTY DISCARD MISSED: %r" % cmd)
+        if warned("git restore --staged a.txt"):
+            fails.append("GIT FALSE ALARM: restore --staged keeps edits")
+        open(os.path.join(d, ".env"), "w").write("KEY=x")
+        for cmd in ["git add .", "git add -A", "git add .env"]:
+            if not warned(cmd):
+                fails.append("SECRET STAGE MISSED: %r" % cmd)
+        for cmd in ["git stash clear", "git branch -D feat", "gh repo create x --public"]:
+            if not warned(cmd):
+                fails.append("GIT WARN MISSED: %r" % cmd)
+        if warned("git branch -d feat"):
+            fails.append("GIT FALSE ALARM: branch -d is safe")
+    return fails
 
 
 def main():
@@ -245,6 +282,8 @@ def main():
         p = run(junk)
         if p.returncode != 0 or p.stdout.strip():
             fails.append("MALFORMED INPUT NOT SAFE: %r rc=%d out=%r" % (junk, p.returncode, p.stdout[:60]))
+
+    fails += check_git_state()
 
     total = (len(MUST_BLOCK) + len(MUST_WARN) + len(MUST_PASS)
              + len(MUST_BLOCK_FILES) + len(MUST_BLOCK_WRITES) + len(MUST_PASS_WRITES))

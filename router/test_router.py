@@ -7,16 +7,17 @@ Two jobs:
    (teach_me vs user_confused, risky vs execute). These are the ones that
    regress silently when someone edits keywords.
 
-2. The 74-case dev set in `eval_set.json`, scored per class. Per-class matters:
+2. The dev set in `eval_set.json`, scored per class. Per-class matters:
    an aggregate of 96% can hide a class that is 0%, and the class that must
    never be wrong is `risky_action` -- a wrong label there means the model
    proceeds instead of asking.
 
-C1: `eval_set.json` is 74 hand-written cases, not a benchmark. The numbers
+C1: `eval_set.json` is ~90 hand-written cases, not a benchmark. The numbers
 below are a regression baseline for this repo, not evidence of generalisation.
 """
 import json
 import os
+import re
 import sys
 import time
 
@@ -35,7 +36,7 @@ CASES = [
     ("React 還是 Vue 比較好", "research_needed"),
     ("幫我把專案跑起來", "execute_request"),
     ("幫我做一個網站", "ambiguous_request"),
-    ("我想要一個可以記帳的東西", "ambiguous_request"),
+    ("我想要一個可以記帳的東西", "build_request"),
     ("把 h1 的字改成紅色", "clear_request"),
     ("在 app.py 第 10 行加一個 print", "clear_request"),
     ("現在做手機 app 大家都用什麼", "research_needed"),
@@ -116,8 +117,39 @@ def test_missing_model_warns(fails):
         r._cache.clear()
 
 
+def test_dispatch(fails):
+    """Wheel-first is the point of the router: once the goal is known, the DO
+    line must make the model look for prior art before proposing how."""
+    on = {"blocks": {"research": "on"}}
+    for intent in r.WHEEL_INTENTS:
+        do = r.dispatch(intent, on, "codex")
+        if "MUST be $wheel" not in do:
+            fails.append("dispatch %s: no wheel-first: %r" % (intent, do))
+    if "genie-harness:wheel" not in r.dispatch("build_request", on, "claude"):
+        fails.append("dispatch: claude host must name the namespaced plugin skill")
+    for intent in ("clear_request", "teach_me", "risky_action", "continue"):
+        if "wheel" in r.dispatch(intent, on, "codex"):
+            fails.append("dispatch %s: wheel where it is not wanted" % intent)
+    off = r.dispatch("build_request", {"blocks": {"research": "off"}}, "codex")
+    if "wheel" in off or "{" in off:
+        fails.append("dispatch: research off still searches or leaks a placeholder: %r" % off)
+    mine = r.dispatch("build_request", {"blocks": {"research": "on"},
+                                        "handed_off": {"research": "my-tool"}}, "codex")
+    if "my-tool" not in mine or "$wheel" in mine:
+        fails.append("dispatch: hand-off to another prior-art tool ignored: %r" % mine)
+    deg = r.dispatch("degraded", on, "codex")
+    if "MUST be $wheel" not in deg or "router could not classify" not in deg:
+        fails.append("dispatch: missing model must hand judgment back, wheel-first: %r" % deg)
+    for intent in list(r.DO):
+        for res in ({}, {"blocks": {"research": "off"}}):
+            out = r.dispatch(intent, res, "claude")
+            if "{" in out or re.search(r"MUST be (?![$\w])", out):
+                fails.append("dispatch %s: unfilled placeholder: %r" % (intent, out))
+
+
 def main():
     fails = []
+    test_dispatch(fails)
     run_cases(CASES, fails, "boundary")
     run_eval_set(fails)
     test_missing_model_warns(fails)
@@ -132,7 +164,7 @@ def main():
         for f in fails:
             print("  " + f)
         sys.exit(1)
-    print("\nPASS  %d boundary cases + 74-case dev set (per-class, safe=100%%) + missing-model warning"
+    print("\nPASS  %d boundary cases + dev set (per-class, safe=100%%) + dispatch + missing-model warning"
           % len(CASES))
 
 

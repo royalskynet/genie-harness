@@ -28,7 +28,9 @@ def fetch(name, dst):
     if os.path.exists(dst):
         return
     print("downloading", name, "...", flush=True)
-    urllib.request.urlretrieve(BASE + name, dst)
+    # .part + rename: an interrupted download must not look finished next run
+    urllib.request.urlretrieve(BASE + name, dst + ".part")
+    os.replace(dst + ".part", dst)
 
 
 def main():

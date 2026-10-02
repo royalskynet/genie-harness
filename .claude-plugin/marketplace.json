@@ -1,0 +1,14 @@
+{
+  "name": "genie-harness",
+  "description": "Genie Harness for Claude Code: a beginner-friendly harness that routes by intent.",
+  "owner": {
+    "name": "royalskynet"
+  },
+  "plugins": [
+    {
+      "name": "genie-harness",
+      "source": "./",
+      "description": "Intent-routed beginner harness: wheel-first, plain language, catastrophic-command guard."
+    }
+  ]
+}

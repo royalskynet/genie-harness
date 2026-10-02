@@ -17,8 +17,14 @@ the guess silently steers the model, while `unsure` hands the decision back to
 the model's own judgement (the three-tier waterfall pattern: heuristics ->
 embedding -> defer).
 
+Then it dispatches. The label alone made the model look up what to do in a
+table; a beginner never types `$wheel`, so the hook says it outright: one `DO:`
+line naming the skill to use this turn, followed by the turn's prefs. This is
+the only UserPromptSubmit hook; prefs live in prefs.py.
+
 Never fails loudly: any error -> default intent with conf=low.
 CLI: `genie_router.py "some text"`  or  `echo text | genie_router.py --text`.
+Hook: `genie_router.py [--host codex|claude]` with the hook JSON on stdin.
 """
 import json
 import os
@@ -27,7 +33,11 @@ import sys
 import unicodedata
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.environ.get("GENIE_MODEL_DIR", os.path.join(HERE, "model"))
+# install.sh puts the model in the checkout; the Claude Code plugin puts it in
+# ~/.genie/model, because the plugin directory is replaced on every update.
+MODEL_DIR = os.environ.get("GENIE_MODEL_DIR") or next(
+    (d for d in (os.path.join(HERE, "model"), os.path.expanduser("~/.genie/model"))
+     if os.path.isfile(os.path.join(d, "vocab.json"))), os.path.join(HERE, "model"))
 INTENTS = json.load(open(os.path.join(HERE, "intents.json"), encoding="utf-8"))
 UNSURE = "unsure"
 
@@ -151,19 +161,125 @@ def confidence(intent, score, why):
     return "high" if score >= INTENTS.get("high_threshold", 0.55) else "low"
 
 
+# How each host names a skill. Codex: `$wheel`. Claude Code loads Genie as a
+# plugin, so its skills are namespaced and invoked through the Skill tool.
+SKILL_REF = {"codex": "$%s", "claude": "the genie-harness:%s skill"}
+
+# intent -> what to do this turn. `{wheel}` etc. become host skill references.
+# Wheel-first is the point: once the user's goal is known, find what already
+# does it before proposing how. A beginner cannot judge a hand-rolled plan.
+DO = {
+    # "MUST ... first" is deliberate: a soft "run X" was skipped ~1 in 4 turns
+    # in headless Claude Code runs, because the model already "knew" an answer.
+    "build_request": "the user wants something that does a job. Your FIRST action this "
+                     "turn MUST be {wheel} (Quick), before writing any reply, even if you "
+                     "think you know the answer: apps, services, built-in features, "
+                     "packages or templates that already do it. Then the verdict in plain "
+                     "words and at most 3 options (simplest -> balanced -> freest), "
+                     "recommend one, and wait for their pick before building.",
+    "research_needed": "your FIRST action this turn MUST be {wheel}, before answering: "
+                       "official docs, community consensus, mature repos. Versions and "
+                       "prices from official pages, not memory.",
+    "execute_request": "use {genie-execute}: do every reversible step in one go, stop only "
+                       "before an irreversible one. A new dependency with 2+ candidates -> "
+                       "{wheel} first.",
+    "clear_request": "just do it, run it, then say in one line what changed.",
+    "teach_me": "use {genie-explain} ({genie-terms} for the one key term); end by checking "
+                "they understood.",
+    "user_confused": "use {genie-explain}: shorter, fewer terms, one analogy at their level; "
+                     "stay at that level for the rest of the conversation.",
+    "risky_action": "say in one plain sentence what this does and whether it can be undone, "
+                    "then wait for a yes.",
+    "ambiguous_request": "their goal is not clear yet. Ask ONE question as a pick-list of at "
+                         "most 3 concrete readings. Once the goal is clear, run {wheel} "
+                         "before proposing how.",
+    "continue": "they are answering your last message (a yes or a pick). Carry on with that "
+                "plan; do not ask again.",
+    UNSURE: "you cannot tell what they want. Say so and ask one short question; do not guess.",
+    # model missing (e.g. still downloading): the label is a placeholder, so
+    # hand the judgment back instead of dispatching "just do it".
+    "degraded": "the intent router could not classify this message (model unavailable). "
+                "Judge it yourself: if they want something built or a tool chosen, your "
+                "FIRST action MUST be {wheel}; if it is irreversible, confirm first.",
+}
+WHEEL_INTENTS = ("build_request", "research_needed")
+# The user turned research off: same flow, no prior-art search.
+DO_NO_WHEEL = {
+    "build_request": "the user wants something that does a job (research is off, so no "
+                     "prior-art search). Give at most 3 options (simplest -> balanced -> "
+                     "freest), recommend one, and wait for their pick before building.",
+    "research_needed": "answer from official docs (research is off, so no wider search); "
+                       "say how current your source is.",
+    "execute_request": "use {genie-execute}: do every reversible step in one go, stop only "
+                       "before an irreversible one.",
+    "ambiguous_request": "their goal is not clear yet. Ask ONE question as a pick-list of "
+                         "at most 3 concrete readings.",
+    "degraded": "the intent router could not classify this message (model unavailable). "
+                "Judge it yourself; if it is irreversible, confirm first.",
+}
+
+
+def dispatch(intent, res, host="codex"):
+    """-> the `DO:` line. `res` is prefs.resolve(); research off or handed to
+    another tool changes who looks for prior art, never whether we ask first."""
+    ref = SKILL_REF.get(host, SKILL_REF["codex"])
+    do = DO.get(intent, DO["clear_request"])
+    blocks, handed = res.get("blocks", {}), res.get("handed_off", {})
+    # prefs.BUILD saw "about to build" even though the label is something else
+    if intent not in WHEEL_INTENTS + ("risky_action", "continue") and \
+            blocks.get("research") == "on" and "research" in res.get("turn_overrides", {}):
+        do = DO["build_request"]
+    if handed.get("research"):
+        wheel = "%s (the user's prior-art tool)" % handed["research"]
+    elif blocks.get("research") == "off":
+        wheel = ""
+        do = DO_NO_WHEEL.get(intent, do)
+    else:
+        wheel = ref % "wheel"
+    names = ("genie-execute", "genie-explain", "genie-terms")
+    return "DO: " + do.format(wheel=wheel, **{n: ref % n for n in names})
+
+
+def hook(raw, host="codex"):
+    """UserPromptSubmit: one injection = tag + DO + prefs. Fails open per part."""
+    try:
+        data = json.loads(raw)
+        text = data.get("prompt") or data.get("user_prompt") or data.get("message") or ""
+    except Exception:
+        text = raw
+    if not isinstance(text, str) or not text.strip():
+        return ""
+    intent, score, why = classify(text)
+    conf = confidence(intent, score, why)
+    if os.environ.get("GENIE_DEBUG"):
+        sys.stderr.write("genie: %s score=%.2f conf=%s via=%s\n" % (intent, score, conf, why))
+    lines = ["genie: intent=%s conf=%s" % (intent, conf)]
+    try:
+        sys.path.insert(0, HERE)
+        import prefs
+        res = prefs.resolve(text)
+        lines.append(dispatch("degraded" if why.startswith("fallback:") else intent, res, host))
+        lines.append(prefs.render_context(res, host))
+    except Exception as e:  # prefs broken: still route
+        sys.stderr.write("genie-router: prefs unavailable (%s)\n" % e)
+        lines.append(dispatch(intent, {}, host))
+    return "\n".join(lines)
+
+
 def main():
     argv = sys.argv[1:]
-    if argv and argv[0] != "--text":
-        text = " ".join(argv)
-    elif argv:
-        text = sys.stdin.read()
-    else:
-        raw = sys.stdin.read()
-        try:
-            data = json.loads(raw)
-            text = data.get("prompt") or data.get("user_prompt") or data.get("message") or ""
-        except Exception:
-            text = raw
+    host = "codex"
+    if argv[:1] == ["--host"] and len(argv) > 1:
+        host, argv = argv[1], argv[2:]
+    if not argv:
+        ctx = hook(sys.stdin.read(), host)
+        if ctx:
+            json.dump({"hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": ctx,
+            }}, sys.stdout)
+        return
+    text = sys.stdin.read() if argv[0] == "--text" else " ".join(argv)
     intent, score, why = classify(text)
     conf = confidence(intent, score, why)
     if os.environ.get("GENIE_DEBUG"):

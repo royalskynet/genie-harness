@@ -23,7 +23,7 @@ import overlap  # noqa: E402
 _real_scan = overlap.scan
 overlap.scan = lambda *a, **k: {}
 
-PREFS_HOOK = os.path.join(HERE, "prefs_hook.py")
+PREFS_HOOK = os.path.join(HERE, "genie_router.py")  # the one UserPromptSubmit hook
 
 
 def eq(got, want, label, fails):

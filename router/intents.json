@@ -1,10 +1,24 @@
 {
   "_comment": "Tiny Semantic Router 分類定義。keywords = 零成本 regex 快路徑（順序即優先序，先命中先贏）；examples = 算 embedding 質心用，刻意寫成「描述這個使用者處境 + 需要什麼回應」的長句，而不是短命令。OpenAI cookbook 的零樣本實驗顯示，描述性標籤比單純標籤準確率高（0.95 vs 0.87），這是免費的準確度提升。",
-  "_order_note": "順序有意義：(1) teach_me 先攔「這是什麼／從頭教我」——冷啟動沒有「上一段」可供 user_confused 簡化，且 teach_me 的關鍵字不會誤抓「聽不懂」(2) risky_action 攔明示破壞動作，且排在 research/execute 之前 (3) research → execute → ambiguous → clear 依序，每一類的 regex 都只在前面的類別都沒命中時才生效。",
+  "_order_note": "順序有意義（先命中先贏）：(0) continue 只吃整句是「好／第二個」這種短回覆，放最前面，否則「好」會被當成新任務 (1) teach_me 先攔「這是什麼」(2) risky_action 攔明示破壞動作 (3) research（比較／選型）先於 build_request（要一個東西），兩者都會先跑 wheel (4) execute → ambiguous → clear。ambiguous 的 regex 錨定整句，只吃「幫我做個網站」這種沒有目標的請求；一旦講出要做什麼，就是 build_request。",
   "threshold": 0.35,
   "high_threshold": 0.55,
   "default": "clear_request",
   "intents": {
+    "continue": {
+      "keywords": [
+        "^(好|好的|好啊|好喔|好呀|可以|行|對|是|嗯|沒問題|就這樣|就這個|就它|照做|照你說的|繼續|開始吧?|go|ok|okay|yes|yep|sure|do it|go ahead|sounds good|lgtm)[。.!！~～ ]*$",
+        "^(第?\\s*[一二三1-3]\\s*(個|種|號)?|選?\\s*[123abcABC]|option\\s*[123abc])[。.!！~～ ]*$",
+        "^(用|選|就用)(第[一二三1-3](個|種)|最簡單|最平衡|最自由)"
+      ],
+      "examples": [
+        "好，就照你說的做",
+        "第二個",
+        "可以，開始吧",
+        "yes go ahead",
+        "ok sounds good"
+      ]
+    },
     "teach_me": {
       "keywords": [
         "什麼是",
@@ -186,6 +200,32 @@
         "recommend a free hosting service for a static site"
       ]
     },
+    "build_request": {
+      "keywords": [
+        "我想要(一個|一套|個).{2,}",
+        "(有沒有|能不能|可不可以|可以)(做|弄|寫)(一個|個).{2,}",
+        "(寫|做|弄|建|架|開發)(一個|一支|一套|個|支|套).{1,12}(程式|腳本|工具|網站|網頁|app|系統|bot|機器人|外掛|插件|服務|爬蟲|後台|頁面|小程式)",
+        "(寫|做|弄)(一個|個|支).{0,6}(程式|腳本)(把|來|幫|讓|自動)",
+        "每天自動|定時自動|自動(幫我|把|寄|通知|備份|整理|下載|抓|回|發|更新|同步)",
+        "\\b(build|make|create|write|code) (me )?an? (\\w+ ){0,4}?(app|tool|script|bot|scraper|site|website|service|plugin|extension|dashboard)\\b.{3,}",
+        "\\bi (want|need) (an? )?(tool|app|script|bot|website|way) (that|to|which|for)\\b",
+        "有(沒有)?辦法.{0,10}自動"
+      ],
+      "examples": [
+        "我想要一個可以記帳的東西，每天記下花了多少錢",
+        "幫我做一個網頁讓客人可以線上預約時間",
+        "寫一個程式每天自動把股價寄到我的信箱",
+        "幫我做一個 LINE 機器人自動回覆客人的問題",
+        "我想把一堆 PDF 合併成一個檔案，幫我寫個工具",
+        "幫我寫個程式把資料夾裡的照片批次改名",
+        "能不能做一個東西提醒我每小時喝水",
+        "幫我做一個爬蟲抓網站上的商品價格",
+        "I want a tool that turns my spreadsheet into a chart automatically",
+        "build me a discord bot that posts the weather every morning",
+        "write a script that backs up my photos to the cloud",
+        "make a website where people can book appointments with me"
+      ]
+    },
     "execute_request": {
       "keywords": [
         "幫我(跑|跑起來|執行|安裝|裝|裝起來|部署|部上去|啟動|開|上傳|推上去|建置)",
@@ -217,7 +257,7 @@
     },
     "ambiguous_request": {
       "keywords": [
-        "^(幫我)?(做|弄|搞|用|寫)一?(個|下)?(東西|網站|app|程式|工具|小程式)",
+        "^(幫我)?(做|弄|搞|用|寫)一?(個|下)?(東西|網站|app|程式|工具|小程式)[吧啦呢嗎。！!？?~～ ]*$",
         "隨便",
         "都可以",
         "都行",
@@ -235,13 +275,13 @@
       ],
       "examples": [
         "幫我寫一個網站，我還沒想好要做什麼內容",
-        "我想做一個記帳的 app 但完全還沒想好功能",
         "隨便幫我做個東西，能用就好",
         "我不知道要什麼，你幫我決定做什麼都可以",
         "我只有一個模糊的想法，幫我想想做個什麼工具",
         "can you make me something, I have no idea what",
         "build something that improves my workflow somehow",
-        "I want a website but I have no idea what to put on it"
+        "I want a website but I have no idea what to put on it",
+        "幫我做個東西，什麼都可以"
       ]
     },
     "clear_request": {
@@ -269,7 +309,10 @@
         "fix the typo in the README title",
         "change the font size of h1 to 24px",
         "add a test for the parse_date function",
-        "look at this stack trace and tell me what caused it"
+        "look at this stack trace and tell me what caused it",
+        "幫我在這段程式加一個註解說明它在做什麼",
+        "在現有的頁面上加一個按鈕",
+        "幫我在這個函式裡加一行 log"
       ]
     }
   },

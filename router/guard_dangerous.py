@@ -376,6 +376,69 @@ def inspect_command(cmd, _depth=0):
     return hits
 
 
+# --- beginner footguns that depend on the repo's state ---------------------
+# Warn only: each is fine in the right state, and a beginner cannot tell the
+# states apart. `dirty` rules stay quiet on a clean tree, so the common
+# `git reset --hard` on a feature branch costs nothing.
+GIT_WARN = [
+    ("git-discard-changes", "dirty",
+     r"\bgit\s+(?:reset\b[^|;&]*--hard|checkout\b[^|;&]*\s--(?:\s|$)|checkout\s+\.(?:\s|$)"
+     r"|restore\b(?![^|;&]*--staged))",
+     "This throws away changes that were never saved in git, and git cannot bring them "
+     "back. Tell the user which files have unsaved changes and get a yes first, or "
+     "`git stash` them."),
+    ("git-stash-destroy", None, r"\bgit\s+stash\s+(?:clear|drop)\b",
+     "This permanently deletes saved-aside work (stashes). Check `git stash list` with "
+     "the user first."),
+    ("git-branch-force-delete", None, r"\bgit\s+branch\s+[^|;&]*(?:-D\b|--delete\s+--force|-df\b)",
+     "This deletes a branch even if its work was never merged anywhere. Use `-d` (lower "
+     "case), which refuses when work would be lost."),
+    ("secret-staged", "secret", r"\bgit\s+(?:add\b|commit\b[^|;&]*\s-[a-zA-Z]*a)",
+     "A file that looks like passwords or API keys (.env, *.pem, *.key, credentials) "
+     "is about to go into git. Once pushed, the keys are public and must be replaced. "
+     "Add it to .gitignore first and tell the user."),
+    ("repo-public", None,
+     r"\bgh\s+repo\s+(?:create\b[^|;&]*--public|edit\b[^|;&]*--visibility[=\s]+public)",
+     "This makes the repository visible to everyone on the internet. Confirm with the "
+     "user, and check it holds no keys or personal data first."),
+]
+GIT_WARN_C = [(n, cond, re.compile(p), r) for n, cond, p, r in GIT_WARN]
+SECRET_FILE = re.compile(
+    r"(?:^|/)(?:\.env(?!\.(?:example|sample|template)\b)(?:\.[\w.-]+)?|[^/]+\.(?:pem|key|p12)"
+    r"|id_(?:rsa|ed25519|ecdsa)|credentials(?:\.json)?|secrets?\.(?:json|ya?ml|env))$")
+
+
+def _git_changes(cwd):
+    """-> changed/untracked paths git would see, or None when unknown."""
+    import subprocess
+    try:
+        out = subprocess.run(["git", "-C", cwd or ".", "status", "--porcelain",
+                              "--untracked-files=all"], capture_output=True, text=True,
+                             timeout=2).stdout
+    except Exception:
+        return None
+    return [l[3:].split(" -> ")[-1].strip('"') for l in out.splitlines() if len(l) > 3]
+
+
+def inspect_git(cmd, cwd=None):
+    """State-aware warn tier. Runs `git status` only when a rule's text matched."""
+    if not cmd or not isinstance(cmd, str):
+        return []
+    live = _blank_quotes("\n".join(l.split("#", 1)[0] for l in cmd.splitlines()))
+    for name, cond, rx, reason in GIT_WARN_C:
+        if not rx.search(live):
+            continue
+        if cond == "dirty":
+            if _git_changes(cwd) == []:
+                continue  # clean tree: nothing to lose; unknown state still warns
+        elif cond == "secret":
+            named = any(SECRET_FILE.search(t) for t in cmd.split())
+            if not named and not any(SECRET_FILE.search(c) for c in _git_changes(cwd) or []):
+                continue
+        return [("warn", name, reason)]
+    return []
+
+
 def inspect_path(path):
     if not path or not isinstance(path, str):
         return []
@@ -473,6 +536,8 @@ def main():
         if not isinstance(tool_input, dict):
             return
         hits = inspect_command(tool_input.get("command"))
+        if not hits:
+            hits = inspect_git(tool_input.get("command"), data.get("cwd"))
         if not hits:
             for key in ("file_path", "path", "notebook_path"):
                 if tool_input.get(key):

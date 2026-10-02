@@ -100,7 +100,6 @@ def _cmd(script):
     return "%s %s" % (PY, shlex.quote(os.path.join(here, "router", script)))
 HOOKS = [
     ("UserPromptSubmit", None, "genie_router.py", 5),
-    ("UserPromptSubmit", None, "prefs_hook.py", 5),
     ("PreToolUse", "Bash|Write|Edit|apply_patch|MultiEdit", "guard_dangerous.py", 5),
 ]
 data = {"hooks": {}}
@@ -109,6 +108,18 @@ changed = False
 if os.path.exists(path):
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
+# Scripts older versions registered that no longer exist (prefs_hook.py folded
+# into genie_router.py). Drop them, or Codex runs a missing file every prompt.
+RETIRED = ("prefs_hook.py",)
+for _lst in data.get("hooks", {}).values():
+    for _e in _lst:
+        _keep = [hh for hh in _e.get("hooks", [])
+                 if not any(r in hh.get("command", "") and "genie" in hh.get("command", "")
+                            for r in RETIRED)]
+        if len(_keep) != len(_e.get("hooks", [])):
+            _e["hooks"] = _keep
+            changed = True
+            print("  removed retired genie hook")
 # One registration entry per event, several hooks objects inside it (Codex
 # hooks.json schema). Match entries/hooks by script filename, not by the last
 # token of the quoted command (which breaks when the checkout path has spaces).
@@ -227,7 +238,6 @@ fi
 PY="$(command -v python3)"
 _GUARD="$("$PY" -c 'import os,sys; print(os.path.join(sys.argv[1],"router","guard_dangerous.py"))' "$HERE")"
 _ROUTER="$("$PY" -c 'import os,sys; print(os.path.join(sys.argv[1],"router","genie_router.py"))' "$HERE")"
-_PREFS="$("$PY" -c 'import os,sys; print(os.path.join(sys.argv[1],"router","prefs_hook.py"))' "$HERE")"
 if [ -f "$_GUARD" ]; then
   echo '{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}' | "$PY" "$_GUARD" \
     | grep -q '"permissionDecision": "deny"' \
@@ -240,9 +250,9 @@ if [ -f "$_ROUTER" ]; then
     && echo "router smoke test: PASS" \
     || { echo "router smoke test: FAILED"; exit 1; }
 fi
-if [ -f "$_PREFS" ]; then
+if [ -f "$_ROUTER" ]; then
   echo '{"prompt":"什麼是 hook"}' \
-    | GENIE_PREFS="$(mktemp -d)/prefs.json" "$PY" "$_PREFS" \
+    | GENIE_PREFS="$(mktemp -d)/prefs.json" "$PY" "$_ROUTER" \
     | grep -q "terms\[on\]" \
     && echo "prefs smoke test: PASS" \
     || { echo "prefs smoke test: FAILED"; exit 1; }

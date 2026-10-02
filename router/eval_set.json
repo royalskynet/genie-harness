@@ -57,7 +57,9 @@
     {"text": "recommend a free hosting service", "want": "research_needed"},
 
     {"text": "幫我寫個網站", "want": "ambiguous_request"},
-    {"text": "幫我做一個記帳 app", "want": "ambiguous_request"},
+
+    {"text": "幫我做一個記帳 app", "want": "build_request"},
+
     {"text": "隨便幫我寫個網站", "want": "ambiguous_request"},
     {"text": "我不知道要什麼 你幫我決定", "want": "ambiguous_request"},
     {"text": "我想做個工具", "want": "ambiguous_request"},
@@ -81,6 +83,21 @@
     {"text": "幫我把資料庫清空", "want": "risky_action"},
     {"text": "delete everything and start over", "want": "risky_action"},
     {"text": "drop the production database", "want": "risky_action"},
-    {"text": "wipe the disk", "want": "risky_action"}
+    {"text": "wipe the disk", "want": "risky_action"},
+
+    {"text": "幫我做一個記帳網頁", "want": "build_request"},
+    {"text": "我想要一個可以記帳的東西", "want": "build_request"},
+    {"text": "寫個程式每天把天氣寄給我", "want": "build_request"},
+    {"text": "幫我寫一個爬蟲抓 PTT 文章", "want": "build_request"},
+    {"text": "我想把照片批次改名", "want": "build_request"},
+    {"text": "能不能做一個提醒我喝水的東西", "want": "build_request"},
+    {"text": "幫我做一個 LINE 機器人", "want": "build_request"},
+    {"text": "I need a tool that merges PDFs", "want": "build_request"},
+    {"text": "build me a bot that posts the weather to discord", "want": "build_request"},
+
+    {"text": "好", "want": "continue"},
+    {"text": "第二個", "want": "continue"},
+    {"text": "可以，開始吧", "want": "continue"},
+    {"text": "ok go ahead", "want": "continue"}
   ]
 }

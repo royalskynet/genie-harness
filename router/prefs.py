@@ -75,29 +75,22 @@ LEVEL_DEFAULTS = {
 
 # How to explain, per level. Same length budget at every level; what changes is
 # where the analogy comes from. Concrete table per term: $genie-explain.
+# Only the analogy source is injected: what each block *does* is in AGENTS.md,
+# so repeating it here spent a paragraph per turn to say nothing new.
 REGISTER = {
-    "beginner": "analogies from daily life (kitchen, post office, game saves); "
-                "every new term gets a one-line glossary",
-    "intermediate": "analogies from tools they already use (spreadsheets, folders, "
-                    "browser tabs); name the real term once",
-    "advanced": "analogies from adjacent technical ideas (an index, a queue, a lockfile); "
+    "beginner": "daily life (kitchen, post office, game saves)",
+    "intermediate": "tools they already use (spreadsheets, folders, browser tabs); "
+                    "name the real term once",
+    "advanced": "adjacent technical ideas (an index, a queue, a lockfile); "
                 "real terms freely",
-    "expert": "no analogies; precise terms, the mechanism, the trade-off, a source link",
+    "expert": "none; precise terms, the mechanism, the trade-off, a source link",
 }
 
 BLOCKS = tuple(LEVEL_DEFAULTS["beginner"].keys())
 
-# What each block is, in one line. Used to build the injected context, so the
-# model knows what it is being asked to do without reading this file.
-BLOCK_MEANING = {
-    "terms": "plain-language glossary for a term the user will meet again",
-    "examples": "a concrete analogy or example when abstraction loses them",
-    "steps": "numbered steps before doing multi-step work",
-    "research": "run wheel: find an existing tool/package/service before hand-rolling, "
-                "and tell the user if one exists",
-    "confirm": "state what is irreversible and confirm before doing it",
-    "humanize": "natural conversational tone, continuity, no robotic scaffolding",
-}
+# What each block means is not repeated per turn: the injected dial is only the
+# state, and the meaning table lives in AGENTS.md where the model already reads
+# it. Spending ~500 characters of every prompt to restate it bought nothing.
 
 # Hard-wired knowledge for the model, not a preference. Deliberately not tunable:
 # how a turn reads depends on what was asked, not on how much the user likes verbosity.
@@ -457,15 +450,19 @@ def render_context(res, host="codex"):
             "config, not Genie's)." % (other, cap, overlap.CAPS[cap],
                                        overlap.RECOMMEND[cap].format(other=other),
                                        CLI, cap, names[0], other))
+    # One line, states only: this runs on every prompt, so the dial has to be
+    # scannable at a glance rather than six paragraphs long. Marks ride along
+    # after the value so a change never changes state silently.
+    dial = []
     for name in BLOCKS:
-        st = res["blocks"][name]
         owned = next((o for c, o in handed.items()
                       if (c == "research" and name == "research")
                       or (c == "style" and name in STYLE_BLOCKS)), "")
         mark = " (this turn only)" if name in res["turn_overrides"] else (
             " (handled by %s)" % owned if owned else (
                 " (you set this)" if name in res["pinned"] else ""))
-        lines.append("- %s[%s]%s: %s" % (name, st, mark, BLOCK_MEANING[name]))
+        dial.append("%s=%s%s" % (name, res["blocks"][name], mark))
+    lines.append("blocks: " + " ".join(dial))
     lines.append("not preference-tunable, always on: " + "; ".join(ALWAYS))
     if handed.get("guard"):
         lines.append("catastrophic-command gate: handed to %s by the user; Genie's guard "

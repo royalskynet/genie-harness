@@ -253,7 +253,7 @@ fi
 if [ -f "$_ROUTER" ]; then
   echo '{"prompt":"什麼是 hook"}' \
     | GENIE_PREFS="$(mktemp -d)/prefs.json" "$PY" "$_ROUTER" \
-    | grep -q "terms\[on\]" \
+    | grep -q "terms=on" \
     && echo "prefs smoke test: PASS" \
     || { echo "prefs smoke test: FAILED"; exit 1; }
 fi

@@ -5,6 +5,15 @@
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cat "$ROOT/AGENTS.md"
 
+# macOS without Command Line Tools has a /usr/bin/python3 stub that only opens
+# an install dialog, so test that it runs, not that it exists.
+if ! python3 -c "" 2>/dev/null; then
+  echo
+  echo "Genie setup: python3 is missing, so intent routing and the guard are off."
+  echo "Tell the user in one sentence, and offer to run: xcode-select --install (macOS) or install python3."
+  exit 0
+fi
+
 MODEL="$HOME/.genie/model"
 [ -f "$ROOT/router/model/vocab.json" ] || [ -f "$MODEL/vocab.json" ] && exit 0
 if ! python3 -c "import numpy" 2>/dev/null; then

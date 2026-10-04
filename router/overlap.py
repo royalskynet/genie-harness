@@ -12,7 +12,8 @@ runs in (Claude Code sets CLAUDE_PLUGIN_ROOT for plugin hooks):
   - Codex: hook commands in $CODEX_HOME/hooks.json, skill dirs in
     ~/.agents/skills and $CODEX_HOME/skills
   - Claude Code: hook commands in ~/.claude/settings.json, skill dirs in
-    ~/.claude/skills (ponytail: other plugins' hooks are not read; add when a
+    ~/.claude/skills, plus enabledPlugins names (ponytail: a plugin's own
+    hooks are not read, so a plugin never counts as a guard; add when a
     plugin-shipped guard is seen in the wild)
 Anything that resolves into the Genie checkout itself is ignored.
 
@@ -37,7 +38,7 @@ SIGNATURES = {
                         r"guardrail|\w*guard\w*", re.I),
     "research": re.compile(r"\w*wheel\w*|prior[-_]?art|dont[-_]?reinvent|deja[-_]?vu|"
                            r"reinvent", re.I),
-    "style": re.compile(r"caveman|terse|output[-_]?style|ponytail", re.I),
+    "style": re.compile(r"caveman|terse|output[-_]?style|ponytail|\basd\b|asd[-_]style", re.I),
 }
 
 # Advice given when asking. Genie's guard is a beginner floor, so a dedicated
@@ -100,9 +101,11 @@ def scan(home=None, dirs=None):
     found = {c: set() for c in CAPS}
     try:
         with open(hooks_file(home), encoding="utf-8") as fh:
-            hooks = json.load(fh).get("hooks", {})
+            cfg = json.load(fh)
+        hooks = cfg.get("hooks", {})
+        plugins = [k.split("@")[0] for k, v in (cfg.get("enabledPlugins") or {}).items() if v]
     except Exception:
-        hooks = {}
+        hooks, plugins = {}, []
     for event, entries in (hooks.items() if isinstance(hooks, dict) else ()):
         for e in entries if isinstance(entries, list) else ():
             for h in (e.get("hooks") or []) if isinstance(e, dict) else ():
@@ -125,6 +128,11 @@ def scan(home=None, dirs=None):
                 continue
             for cap, rx in SIGNATURES.items():
                 if cap != "guard" and rx.search(n):  # a skill cannot block a command
+                    found[cap].add(n.lower())
+    for n in plugins:
+        if not n.startswith("genie"):
+            for cap, rx in SIGNATURES.items():
+                if cap != "guard" and rx.search(n):
                     found[cap].add(n.lower())
     return {c: sorted(v) for c, v in found.items() if v}
 

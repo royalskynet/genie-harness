@@ -370,7 +370,7 @@ def resolve(prompt=None, data=None, persist=True, path=None, found=None):
     # Jobs another installed tool also does, that the user has not been asked about.
     seen = set(data.get("seen", []))
     ask = {c: n for c, n in found.items()
-           if c not in owners and any("%s:%s" % (c, x) not in seen for x in n)}
+           if c not in owners and c not in (data.get("owners") or {}) and any("%s:%s" % (c, x) not in seen for x in n)}
 
     if (durable or lvl or owners or ask or first_run) and persist:
         merged = _blank(data)

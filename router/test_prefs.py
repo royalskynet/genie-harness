@@ -332,6 +332,13 @@ def test_overlap_asks_once_and_hands_off(fails):
         res = prefs.resolve("hi", path=path, found={})
         eq(res["blocks"]["terms"], "on", "tool uninstalled: genie takes the job back", fails)
 
+    # Owner chosen up front (`prefs.py set owner`): never asked, not even once.
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "prefs.json")
+        prefs.save(dict(prefs._blank({}), owners={"style": "caveman"}), path)
+        res = prefs.resolve("hi", path=path, found=found)
+        eq(list(res["ask_owner"]), ["research"], "stored owner is not asked again", fails)
+
 
 def test_overlap_scan_ignores_genie(fails):
     with tempfile.TemporaryDirectory() as td:

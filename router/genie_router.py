@@ -240,12 +240,17 @@ DO = {
                      "stay at that level for the rest of the conversation.",
     "risky_action": "say in one plain sentence what this does and whether it can be undone, "
                     "then wait for a yes.",
-    "ambiguous_request": "their goal is not clear yet. Ask ONE question as a pick-list of at "
-                         "most 3 concrete readings. Once the goal is clear, run {wheel} "
-                         "before proposing how.",
+    "ambiguous_request": "their goal is not clear yet. Never answer only that you cannot. "
+                         "Ask ONE question that offers at most 3 concrete readings of what "
+                         "you CAN do toward it here (tools on this machine, a free app, a "
+                         "script), phrased like 'Do you mean A or B? I can ...'. Say in one "
+                         "plain sentence any part you physically cannot do (e.g. hold a "
+                         "camera). Once the goal is clear, run {wheel} before proposing how.",
     "continue": "they are answering your last message (a yes or a pick). Carry on with that "
                 "plan; do not ask again.",
-    UNSURE: "you cannot tell what they want. Say so and ask one short question; do not guess.",
+    UNSURE: "you cannot tell what they want. Never answer only that you cannot. Offer your "
+            "best 2 readings as one short question ('Do you mean A or B? I can ...'); do not "
+            "guess.",
     # model missing (e.g. still downloading): the label is a placeholder, so
     # hand the judgment back instead of dispatching "just do it".
     "degraded": "the intent router could not classify this message (model unavailable). "
@@ -262,8 +267,12 @@ DO_NO_WHEEL = {
                        "say how current your source is.",
     "execute_request": "use {genie-execute}: do every reversible step in one go, stop only "
                        "before an irreversible one.",
-    "ambiguous_request": "their goal is not clear yet. Ask ONE question as a pick-list of "
-                         "at most 3 concrete readings.",
+    "ambiguous_request": "their goal is not clear yet. Never answer only that you cannot. "
+                         "Ask ONE question that offers at most 3 concrete readings of what "
+                         "you CAN do toward it here (tools on this machine, a free app, a "
+                         "script), phrased like 'Do you mean A or B? I can ...'. Say in one "
+                         "plain sentence any part you physically cannot do (e.g. hold a "
+                         "camera).",
     "degraded": "the intent router could not classify this message (model unavailable). "
                 "Judge it yourself; if it is irreversible, confirm first.",
 }

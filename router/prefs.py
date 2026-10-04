@@ -348,7 +348,7 @@ def parse_prompt(prompt, data=None):
     return turn, durable, notes
 
 
-def resolve(prompt=None, data=None, persist=True, path=None, found=None):
+def resolve(prompt=None, data=None, persist=True, path=None, found=None, dups=None):
     """Full pipeline. Returns a dict describing this turn.
 
     `found` is the overlap scan ({job: [other tools]}); scanned from disk when
@@ -362,6 +362,8 @@ def resolve(prompt=None, data=None, persist=True, path=None, found=None):
                 found = overlap.scan()
             except Exception:
                 pass
+    if dups is None:
+        dups = overlap.duplicates() if data is None else []
     data = _blank(data) if data is not None else load(path)
     turn, durable, notes = parse_prompt(prompt, data)
     text = prompt if isinstance(prompt, str) else ""
@@ -377,8 +379,9 @@ def resolve(prompt=None, data=None, persist=True, path=None, found=None):
     seen = set(data.get("seen", []))
     ask = {c: n for c, n in found.items()
            if c not in owners and c not in (data.get("owners") or {}) and any("%s:%s" % (c, x) not in seen for x in n)}
+    new_dups = [(k, m) for k, m in dups if k not in seen]
 
-    if (durable or lvl or owners or ask or first_run) and persist:
+    if (durable or lvl or owners or ask or new_dups or first_run) and persist:
         merged = _blank(data)
         merged["blocks"].update(durable)
         if lvl:
@@ -386,7 +389,8 @@ def resolve(prompt=None, data=None, persist=True, path=None, found=None):
         if owners:
             merged.setdefault("owners", {}).update(owners)
         # Asked once is enough; a tool installed later is a new name and asks again.
-        merged["seen"] = sorted(seen | {"%s:%s" % (c, x) for c, n in found.items() for x in n})
+        merged["seen"] = sorted(seen | {"%s:%s" % (c, x) for c, n in found.items() for x in n}
+                                | {k for k, _ in new_dups})
         try:
             save(merged, path)
             data = merged
@@ -416,6 +420,7 @@ def resolve(prompt=None, data=None, persist=True, path=None, found=None):
         "blocks": states,
         "first_run": first_run,
         "ask_owner": ask,
+        "duplicates": [m for _, m in new_dups],
         "handed_off": {c: o for c, o in handed.items() if o},
         "lang": data.get("lang"),
         "missing": overlap.missing_companions(found) if first_run else [],
@@ -461,6 +466,8 @@ def render_context(res, host="codex"):
             "config, not Genie's)." % (other, cap, overlap.CAPS[cap],
                                        overlap.RECOMMEND[cap].format(other=other),
                                        CLI, cap, names[0], other))
+    for msg in res.get("duplicates", []):
+        lines.append("DUPLICATE: " + msg + ". Raise it once, alongside anything else you ask.")
     # One line, states only: this runs on every prompt, so the dial has to be
     # scannable at a glance rather than six paragraphs long. Marks ride along
     # after the value so a change never changes state silently.

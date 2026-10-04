@@ -40,7 +40,9 @@ SIGNATURES = {
                         r"guardrail|\w*guard\w*", re.I),
     "research": re.compile(r"\w*wheel\w*|prior[-_]?art|dont[-_]?reinvent|deja[-_]?vu|"
                            r"reinvent", re.I),
-    "style": re.compile(r"caveman|terse|output[-_]?style|ponytail|\basd\b|asd[-_]style", re.I),
+    # ponytail-review/audit/debt/help are one-shot reports, not a tone or depth mode.
+    "style": re.compile(r"caveman|terse|output[-_]?style|ponytail(?![-_]?(review|audit|debt|help))|"
+                        r"\basd\b|asd[-_]style", re.I),
 }
 
 # Advice given when asking. Genie's guard is a beginner floor, so a dedicated
@@ -128,6 +130,8 @@ def scan(home=None, dirs=None):
         for n in names:
             if n.startswith(".") or n.startswith("genie") or _is_genie(os.path.join(d, n)):
                 continue
+            if n.lower() == "wheel":  # a copy of Genie's own skill: duplicates() reports it
+                continue
             for cap, rx in SIGNATURES.items():
                 if cap != "guard" and rx.search(n):  # a skill cannot block a command
                     found[cap].add(n.lower())
@@ -137,6 +141,48 @@ def scan(home=None, dirs=None):
                 if cap != "guard" and rx.search(n):
                     found[cap].add(n.lower())
     return {c: sorted(v) for c, v in found.items() if v}
+
+
+WHEEL_REGISTRY = os.path.expanduser("~/.wheel/registry.tsv")
+
+
+def legacy_registries():
+    """Other places an older or private wheel kept its cards."""
+    claude = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    return [os.path.join(claude, "wheel", "registry.tsv"),
+            os.path.join(codex_home(), "wheel", "registry.tsv")]
+
+
+def duplicates(dirs=None):
+    """-> [(key, message)] for copies of Genie's own parts outside the checkout.
+
+    Not an overlap: a second copy of $wheel is not another tool to hand the job
+    to, it is the same tool drifting apart, with wheel cards split across two
+    registries so step 0 misses old decisions. Never raises.
+    """
+    out = []
+    for d in dirs if dirs is not None else skill_dirs():
+        p = os.path.join(d, "wheel")
+        try:
+            if os.path.isdir(p) and not _is_genie(p):
+                out.append(("dup:skill:" + p,
+                            "a separate copy of Genie's $wheel skill is installed at %s. Two "
+                            "copies drift apart. Diff it against Genie's skills/wheel/SKILL.md, "
+                            "move any local-only rule into the user's CLAUDE.md/AGENTS.md, then "
+                            "offer to delete the copy (show the exact path, wait for a yes)" % p))
+        except Exception:
+            pass
+    for r in legacy_registries():
+        try:
+            if os.path.isfile(r) and not (os.path.exists(WHEEL_REGISTRY)
+                                          and os.path.samefile(r, WHEEL_REGISTRY)):
+                out.append(("dup:registry:" + r,
+                            "wheel cards are also kept in %s, so $wheel step 0 misses them. "
+                            "Append its lines to %s, then replace its folder with a symlink to "
+                            "~/.wheel (reversible; say what you did)" % (r, WHEEL_REGISTRY)))
+        except Exception:
+            pass
+    return out
 
 
 # Tools Genie works better next to but never installs: a new device should not

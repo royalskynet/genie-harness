@@ -16,6 +16,24 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 GUARD = os.path.join(HERE, "guard_dangerous.py")
 
+sys.path.insert(0, HERE)
+import guard_dangerous  # noqa: E402  (needed for the rule-table assertion below)
+
+
+def check_deny_says_alternative():
+    """A deny that only says "no" leaves the user stuck. Every deny must name the
+    concrete thing to do instead, or the gate teaches nothing."""
+    fails = []
+    for name, _pattern, reason in guard_dangerous.BASH_DENY:
+        if "改做：" not in reason:
+            fails.append("DENY WITHOUT ALTERNATIVE: %s -> %s" % (name, reason[:60]))
+    for table in ("TARGET_DENY", "PATH_DENY"):
+        for rule in getattr(guard_dangerous, table):
+            name, reason = rule[0], rule[-1]
+            if "改做：" not in reason:
+                fails.append("DENY WITHOUT ALTERNATIVE: %s:%s -> %s" % (table, name, reason[:60]))
+    return fails
+
 MUST_BLOCK = [
     ("rm -rf ~", "filesystem"),
     ("rm -rf /", "filesystem"),
@@ -284,6 +302,7 @@ def main():
             fails.append("MALFORMED INPUT NOT SAFE: %r rc=%d out=%r" % (junk, p.returncode, p.stdout[:60]))
 
     fails += check_git_state()
+    fails += check_deny_says_alternative()
 
     total = (len(MUST_BLOCK) + len(MUST_WARN) + len(MUST_PASS)
              + len(MUST_BLOCK_FILES) + len(MUST_BLOCK_WRITES) + len(MUST_PASS_WRITES))

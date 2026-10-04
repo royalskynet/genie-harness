@@ -83,6 +83,7 @@ Genie 是陪伴整個工作流程的 harness，不是專門的安全套件，也
 | `teach_me` | 想知道某個東西是什麼、怎麼用 |
 | `user_confused` | 聽不懂你剛剛講的 |
 | `risky_action` | 要做弄不回來的事 |
+| `fix_request` | 原本能用的東西壞了或在報錯。**先重現、讀懂錯誤訊息，修原因不要修症狀，修完重跑並貼真的輸出** |
 | `ambiguous_request` | 還沒有目標；問一題，有目標之後一樣先跑 wheel |
 | `continue` | 在回答你上一則（「好」「第二個」）——接著做，不要再問 |
 | `unsure`（`conf=low`） | router 判斷不出來；承認不確定，問一句最短的 |

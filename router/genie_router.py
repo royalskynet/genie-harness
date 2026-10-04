@@ -233,6 +233,11 @@ DO = {
     "execute_request": "use {genie-execute}: do every reversible step in one go, stop only "
                        "before an irreversible one. A new dependency with 2+ candidates -> "
                        "{wheel} first.",
+    "fix_request": "something that used to work is broken. Reproduce it and read the exact "
+                   "error first. If the cause is not obvious, search the exact error text "
+                   "with {wheel}. Fix the cause, not the symptom, then rerun and paste the "
+                   "real output. Two failed fixes -> stop and run {wheel}; do not try a third "
+                   "variant.",
     "clear_request": "just do it, run it, then say in one line what changed.",
     "teach_me": "use {genie-explain} ({genie-terms} for the one key term); end by checking "
                 "they understood.",
@@ -267,6 +272,10 @@ DO_NO_WHEEL = {
                        "say how current your source is.",
     "execute_request": "use {genie-execute}: do every reversible step in one go, stop only "
                        "before an irreversible one.",
+    "fix_request": "something that used to work is broken. Reproduce it and read the exact "
+                   "error first (research is off, so no wider search). Fix the cause, not "
+                   "the symptom, then rerun and paste the real output. Two failed fixes -> "
+                   "stop and report that instead of trying a third variant.",
     "ambiguous_request": "their goal is not clear yet. Never answer only that you cannot. "
                          "Ask ONE question that offers at most 3 concrete readings of what "
                          "you CAN do toward it here (tools on this machine, a free app, a "

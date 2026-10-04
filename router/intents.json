@@ -1,6 +1,6 @@
 {
   "_comment": "Tiny Semantic Router 分類定義。keywords = 零成本 regex 快路徑（順序即優先序，先命中先贏）；examples = 算 embedding 質心用，刻意寫成「描述這個使用者處境 + 需要什麼回應」的長句，而不是短命令。OpenAI cookbook 的零樣本實驗顯示，描述性標籤比單純標籤準確率高（0.95 vs 0.87），這是免費的準確度提升。",
-  "_order_note": "順序有意義（先命中先贏）：(0) continue 只吃整句是「好／第二個」這種短回覆，放最前面，否則「好」會被當成新任務 (1) teach_me 先攔「這是什麼」(2) risky_action 攔明示破壞動作 (3) research（比較／選型）先於 build_request（要一個東西），兩者都會先跑 wheel (4) execute → ambiguous → clear。ambiguous 的 regex 錨定整句，只吃「幫我做個網站」這種沒有目標的請求；一旦講出要做什麼，就是 build_request。",
+  "_order_note": "順序有意義（先命中先贏）：(0) continue 只吃整句是「好／第二個」這種短回覆，放最前面，否則「好」會被當成新任務 (1) teach_me 先攔「這是什麼」(2) risky_action 攔明示破壞動作 (3) fix_request 攔「本來能跑現在壞掉／在報錯」，放在 research_needed 前面，否則「壞掉了，哪個工具比較好」會被送去比較工具 (4) research（比較／選型）先於 build_request（要一個東西），兩者都會先跑 wheel (5) execute → ambiguous → clear。ambiguous 的 regex 錨定整句，只吃「幫我做個網站」這種沒有目標的請求；一旦講出要做什麼，就是 build_request。",
   "threshold": 0.35,
   "high_threshold": 0.55,
   "default": "clear_request",
@@ -149,6 +149,40 @@
         "run sudo rm -rf on the whole directory"
       ]
     },
+    "fix_request": {
+      "keywords": [
+        "報錯",
+        "錯誤訊息",
+        "壞掉",
+        "壞了",
+        "跑不起來",
+        "不動了",
+        "當掉",
+        "閃退",
+        "怎麼修",
+        "traceback",
+        "stack ?trace",
+        "exception",
+        "\\berror\\b",
+        "failed",
+        "\\bbug\\b",
+        "not working",
+        "crash(es|ed)?\\b",
+        "stopped working"
+      ],
+      "examples": [
+        "我昨天還能跑的程式今天一執行就報錯，我不知道是哪裡出問題",
+        "這個專案之前跑得好好的，現在一開就跳 traceback 說找不到模組",
+        "我的網站剛剛壞掉了，頁面一直顯示錯誤訊息，幫我找出原因再修好",
+        "安裝完依賴之後整個專案就跑不起來了，我不知道該從哪裡查起",
+        "這個函式以前都正常，現在丟出 TypeError: x is undefined，請幫我找出原因",
+        "程式跑到一半就當掉了，log 只寫 exception，請修好它而不是繞過它",
+        "this used to work and now the build fails every time, please find the root cause",
+        "my script crashed with a stack trace and I need the real reason, not a guess",
+        "this feature throws an error every time I click it, it worked last week",
+        "the page stopped working after the update, help me figure out what broke"
+      ]
+    },
     "research_needed": {
       "keywords": [
         "現在.{0,12}用什麼",
@@ -293,7 +327,6 @@
         "看一下",
         "檢查一下",
         "幫我(檢查|找出)",
-        "怎麼修",
         "修一下",
         "修好",
         "為什麼.{0,8}(不能|不行|失敗|不動|壞|錯|跑不起)"

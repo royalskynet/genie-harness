@@ -35,6 +35,7 @@
 | `teach_me` | 他想學 → `$genie-explain`／`$genie-terms`，然後確認他懂了 |
 | `user_confused` | 聽不懂 → `$genie-explain`：更短、一個比喻 |
 | `risky_action` | 破壞性／不可逆 → 一句白話講清楚，等他說好 |
+| `fix_request` | 原本能用的東西壞了／在報錯 → 先重現、讀懂錯誤訊息；原因不明就拿錯誤原文跑 `$wheel`；修原因不修症狀，修完重跑貼真的輸出；改兩次沒好就停手回報，不要試第三招 |
 | `ambiguous_request` | 目標不清楚 → 問一題選擇題；目標清楚後先跑 `$wheel` |
 | `continue` | 在回答你上一則（「好」「第二個」）→ 接著做，不要再問 |
 | `unsure` | router 放棄判斷 → 問一句最短的問題，不要硬猜 |
@@ -169,15 +170,15 @@ claude/                    Claude Code plugin 的 hooks 與 SessionStart 腳本
 
 ### 實測準確度（誠實版）
 
-`router/eval_set.json` 是 **87 句手寫語料，不是 benchmark**。標籤是人工判斷的，不是從真實 log 抽的。這個分數是本 repo 的回歸基準，不是一般化能力的證據。
+`router/eval_set.json` 是 **102 句手寫語料，不是 benchmark**。標籤是人工判斷的，不是從真實 log 抽的。這個分數是本 repo 的回歸基準，不是一般化能力的證據。
 
 | 指標 | 數值 |
 |---|---|
-| 嚴格準確率 | 84/87 = 97% |
-| 安全準確率（正確或 abstain） | 87/87 = 100% |
+| 嚴格準確率 | 99/102 = 97% |
+| 安全準確率（正確或 abstain） | 102/102 = 100% |
 | abstain | 3 |
 
-Per-class：`ambiguous_request` 6/7、`build_request` 10/10、`clear_request` 11/12、`continue` 4/4、`execute_request` 11/11、`research_needed` 10/11、`risky_action` 9/9、`teach_me` 16/16、`user_confused` 7/7。
+Per-class：`ambiguous_request` 12/13、`build_request` 10/10、`clear_request` 10/11、`continue` 4/4、`execute_request` 12/12、`fix_request` 9/9、`research_needed` 10/11、`risky_action` 9/9、`teach_me` 16/16、`user_confused` 7/7。
 
 絕對不能錯的是 `risky_action`——那裡判錯，模型就會直接做而不是先問。所以真正重要的是安全準確率那個數字。
 
@@ -239,6 +240,7 @@ Intent labels and what the `DO:` line dispatches:
 | `teach_me` | wants to learn → `$genie-explain` / `$genie-terms`, then check they understood |
 | `user_confused` | sounds lost → `$genie-explain`: simpler words, one analogy |
 | `risky_action` | destructive/irreversible → one plain sentence on what it does, wait for a yes |
+| `fix_request` | something that used to work is broken → reproduce it and read the exact error; if the cause is not obvious, search the error text with `$wheel`; fix the cause, not the symptom, then rerun and paste the real output. Two failed fixes → stop and report, don't try a third variant |
 | `ambiguous_request` | goal unclear → one pick-list question; `$wheel` once the goal is clear |
 | `continue` | answering your last message ("ok", "the second one") → carry on, don't re-ask |
 | `unsure` | router abstained → ask one short question instead of guessing |
@@ -373,15 +375,15 @@ Measured (M4, Python 3.9): hook 0.03s / 13 MB on a keyword hit, 0.12s / 63 MB on
 
 ### Measured accuracy (honest)
 
-`router/eval_set.json` is **87 hand-written cases, not a benchmark**. The labels are hand-judged, not derived from user logs. The score is a regression baseline for this repo, not evidence of generalisation.
+`router/eval_set.json` is **102 hand-written cases, not a benchmark**. The labels are hand-judged, not derived from user logs. The score is a regression baseline for this repo, not evidence of generalisation.
 
 | Metric | Value |
 |---|---|
-| strict accuracy | 84/87 = 97% |
-| safe accuracy (correct or abstained) | 87/87 = 100% |
+| strict accuracy | 99/102 = 97% |
+| safe accuracy (correct or abstained) | 102/102 = 100% |
 | abstained | 3 |
 
-Per-class: `ambiguous_request` 6/7, `build_request` 10/10, `clear_request` 11/12, `continue` 4/4, `execute_request` 11/11, `research_needed` 10/11, `risky_action` 9/9, `teach_me` 16/16, `user_confused` 7/7.
+Per-class: `ambiguous_request` 12/13, `build_request` 10/10, `clear_request` 10/11, `continue` 4/4, `execute_request` 12/12, `fix_request` 9/9, `research_needed` 10/11, `risky_action` 9/9, `teach_me` 16/16, `user_confused` 7/7.
 
 The class that must never be wrong is `risky_action` — a wrong label there means the model proceeds instead of asking. That is why the safe-accuracy number is the one that matters.
 

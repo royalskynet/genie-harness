@@ -81,7 +81,7 @@
 /plugin install genie-harness@genie-harness
 ```
 
-重開 Claude Code。plugin 會註冊三個 hook（SessionStart 載入 `AGENTS.md`、第一次時下載模型，UserPromptSubmit 跑意圖路由 `--host claude`、PreToolUse 在 `Bash|Write|Edit|MultiEdit|NotebookEdit` 上跑閘門），五個 skill 以 `genie-harness:<名稱>` 出現。需要 Python 3.9+ 和 numpy。第一次開 session 會在背景把意圖模型下載到 `~/.genie/model`（只一次，~512 MB → 35 MB，幾分鐘）；下載完成前，router 會請模型自己判斷意圖，一樣先跑 wheel。缺 numpy 時，模型會被告知要主動提議幫他裝。偏好設定存在 `~/.genie/`，跟 Codex 共用。更新：`/plugin marketplace update genie-harness` 後 `/plugin update genie-harness@genie-harness`（或在 `/plugin` 介面點更新），重開 Claude Code 才生效。模型在 plugin 目錄外，更新不會重新下載。移除：`/plugin uninstall genie-harness`。
+重開 Claude Code。plugin 會註冊四個 hook（SessionStart 載入 `AGENTS.md`、第一次時下載模型，UserPromptSubmit 跑意圖路由 `--host claude`、PreToolUse 在 `Bash|Write|Edit|MultiEdit|NotebookEdit` 上跑閘門，Stop 跑完成閘 `router/done_gate.py`），五個 skill 以 `genie-harness:<名稱>` 出現。完成閘只在 Claude Code 生效：改了 `.py`／`.js` 之類的程式檔、最後一次改完卻什麼都沒跑就停下時，它會擋一次，要你真的跑一次貼輸出（或說明為什麼跑不了）；`.md`／`.txt` 純文字改動不擋，Codex 端沒有這個 hook。需要 Python 3.9+ 和 numpy。第一次開 session 會在背景把意圖模型下載到 `~/.genie/model`（只一次，~512 MB → 35 MB，幾分鐘）；下載完成前，router 會請模型自己判斷意圖，一樣先跑 wheel。缺 numpy 時，模型會被告知要主動提議幫他裝。偏好設定存在 `~/.genie/`，跟 Codex 共用。更新：`/plugin marketplace update genie-harness` 後 `/plugin update genie-harness@genie-harness`（或在 `/plugin` 介面點更新），重開 Claude Code 才生效。模型在 plugin 目錄外，更新不會重新下載。移除：`/plugin uninstall genie-harness`。
 
 ### Codex：一鍵安裝（Quick Start）
 
@@ -135,10 +135,12 @@ router/
   prefs.py                 區塊解析：level 預設、pin、單次覆寫
   overlap.py               找出也在做 guard／research／style 的其他已裝工具
   guard_dangerous.py       PreToolUse hook：擋災難指令，模糊的先警告
+  done_gate.py             Stop hook（Claude Code 限定）：改了程式檔卻沒跑 → 擋一次
   eval_set.json            87 句手寫 dev 語料（不是 benchmark）
   test_router.py           自檢：邊界案例 + dev 語料，per-class，safe=100%，派工
   test_prefs.py            自檢：19 項，含「關區塊不能關安全」
   test_guard.py            自檢：49 deny + 4 warn + 5 git 狀態警告、33 must-pass、寫入掃描
+  test_done_gate.py        自檢：改完沒跑會擋、跑過就放、純問答與純文字放行
   test_repo.py             自檢：大小預算、無絕對路徑、hook 指向存在、不漂移
   setup_model.py           一次性：下載 potion-multilingual-128M → 修剪詞表 → int8
 skills/
@@ -286,7 +288,7 @@ Inside Claude Code:
 /plugin install genie-harness@genie-harness
 ```
 
-Restart Claude Code. The plugin registers three hooks (SessionStart loads `AGENTS.md` and fetches the model on first use, UserPromptSubmit runs the intent router with `--host claude`, PreToolUse runs the guard on `Bash|Write|Edit|MultiEdit|NotebookEdit`) and the five skills as `genie-harness:<name>`. Needs Python 3.9+ and numpy. The first session downloads the intent model in the background into `~/.genie/model` (one time, ~512 MB → 35 MB, a few minutes); until it lands, the router tells the model to judge intent itself, still wheel-first. If numpy is missing, the model is told to offer installing it. Prefs live in `~/.genie/`, shared with Codex. Update with `/plugin marketplace update genie-harness` then `/plugin update genie-harness@genie-harness` (or from the `/plugin` UI), then restart Claude Code; the model lives outside the plugin directory, so it is not downloaded again. Remove with `/plugin uninstall genie-harness`.
+Restart Claude Code. The plugin registers four hooks (SessionStart loads `AGENTS.md` and fetches the model on first use, UserPromptSubmit runs the intent router with `--host claude`, PreToolUse runs the guard on `Bash|Write|Edit|MultiEdit|NotebookEdit`, Stop runs the done gate `router/done_gate.py`) and the five skills as `genie-harness:<name>`. The done gate is Claude Code only: if a code file (`.py`, `.js`, anything not `.md`/`.txt`) was edited and nothing was run after the last edit, it blocks once and makes you run it and show the real output, or say plainly why it cannot be run. Pure `.md`/`.txt` edits are exempt, and Codex has no such hook. Needs Python 3.9+ and numpy. The first session downloads the intent model in the background into `~/.genie/model` (one time, ~512 MB → 35 MB, a few minutes); until it lands, the router tells the model to judge intent itself, still wheel-first. If numpy is missing, the model is told to offer installing it. Prefs live in `~/.genie/`, shared with Codex. Update with `/plugin marketplace update genie-harness` then `/plugin update genie-harness@genie-harness` (or from the `/plugin` UI), then restart Claude Code; the model lives outside the plugin directory, so it is not downloaded again. Remove with `/plugin uninstall genie-harness`.
 
 ### Codex: Quick Start (one-line install)
 
@@ -340,10 +342,12 @@ router/
   prefs.py                 block resolution: level defaults, pins, per-call overrides
   overlap.py               finds other installed tools doing guard / research / style
   guard_dangerous.py       PreToolUse hook: deny catastrophic commands, warn on ambiguous ones
+  done_gate.py             Stop hook (Claude Code only): edited code, ran nothing → block once
   eval_set.json            87 hand-written dev cases (NOT a benchmark)
   test_router.py           self-check: boundary cases + dev set, per-class, safe=100%, dispatch
   test_prefs.py            self-check: 19 tests incl. blocks-cannot-disable-enforcement
   test_guard.py            self-check: 49 deny + 4 warn rules + 5 git-state warns, 33 must-pass, write scan
+  test_done_gate.py        self-check: unrun edits blocked, run-after passes, Q&A and docs pass
   test_repo.py             self-check: size budget, no hardcoded paths, hooks resolve, no drift
   setup_model.py           one-time: download potion-multilingual-128M → trim vocab → int8
 skills/

@@ -383,7 +383,7 @@ def test_hook_shape_and_fail_open(fails):
             out = json.loads(p.stdout)["hookSpecificOutput"]
             if out["hookEventName"] != "UserPromptSubmit":
                 fails.append("wrong event name: %r" % out["hookEventName"])
-            if "terms[on]" not in out["additionalContext"]:
+            if "terms=on" not in out["additionalContext"]:
                 fails.append("asking-for turn did not force terms on")
         except Exception as e:
             fails.append("hook output not parseable: %r / %r" % (p.stdout[:120], e))

@@ -143,14 +143,16 @@ def scan(home=None, dirs=None):
 # inherit one person's setup. Suggested once, on the first run, only if absent.
 COMPANIONS = (
     ("ponytail", "keeps the code it writes minimal: stdlib and what is already "
-                 "installed before anything new",
+                 "installed before anything new; its always-on hook needs `node` on PATH",
      "Claude Code `/plugin marketplace add DietrichGebert/ponytail` then "
      "`/plugin install ponytail@ponytail`; Codex `codex plugin marketplace add "
      "DietrichGebert/ponytail` then install it from `/plugins`"),
     ("fixindex", "a personal fix log: every bug fixed once is found again by its error "
                  "text, and Genie's fix requests check it first",
      "`git clone https://github.com/royalskynet/fixindex.git ~/dev/fixindex && "
-     "ln -s ~/dev/fixindex/fixindex ~/.local/bin/fixindex`"),
+     "ln -s ~/dev/fixindex/fixindex ~/.local/bin/fixindex && mkdir -p ~/notes/runbook/fixes`, "
+     "then add `export FIXINDEX_DIR=$HOME/notes/runbook/fixes` to the shell profile "
+     "(without it fixindex looks in the current directory)"),
 )
 
 

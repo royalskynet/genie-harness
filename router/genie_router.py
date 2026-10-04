@@ -30,6 +30,7 @@ import json
 import os
 import re
 import sys
+import time
 import unicodedata
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -161,6 +162,55 @@ def confidence(intent, score, why):
     return "high" if score >= INTENTS.get("high_threshold", 0.55) else "low"
 
 
+# Calibration log: one JSONL line per classified prompt, so "the router gets
+# this label wrong" is a claim you can check instead of argue about. Purely
+# local, opt-out, redacted, and fail-open -- a broken log must never cost the
+# user their routing line.
+LOG_MAX_BYTES = 1024 * 1024
+# API keys, tokens, long paths: any run of 24+ url-safe chars is opaque, not prose.
+SECRET_RUN = re.compile(r"[A-Za-z0-9_\-]{24,}")
+
+
+def log_path():
+    """`GENIE_LOG` wins (a path, or "0" to opt out); default under the real home
+    dir, resolved late so a test or the hook's HOME override is honoured."""
+    env = os.environ.get("GENIE_LOG")
+    if env == "0":
+        return None
+    if env:
+        return os.path.expanduser(env)
+    return os.path.join(os.path.expanduser("~/.genie"), "route.log")
+
+
+def _append_line(path, line):
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    # Rotate before appending so a full file is never the one we add to: the
+    # previous file stays whole as route.log.1 and the new one starts empty.
+    if os.path.exists(path) and os.path.getsize(path) > LOG_MAX_BYTES:
+        os.replace(path, path + ".1")
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(line + "\n")
+
+
+def log_route(text, intent, score, via, conf):
+    """Append one redacted JSONL record. Every error is swallowed: the hook's
+    job is to route, and a permission error in $HOME is not the user's problem
+    to solve mid-prompt."""
+    try:
+        path = log_path()
+        if not path:
+            return
+        clean = SECRET_RUN.sub("[REDACTED]", (text or "")[:200])
+        _append_line(path, json.dumps(
+            {"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+             "intent": intent, "score": round(float(score), 2),
+             "via": via, "conf": conf, "text": clean}, ensure_ascii=False))
+    except Exception:
+        pass
+
+
 # How each host names a skill. Codex: `$wheel`. Claude Code loads Genie as a
 # plugin, so its skills are namespaced and invoked through the Skill tool.
 SKILL_REF = {"codex": "$%s", "claude": "the genie-harness:%s skill"}
@@ -253,6 +303,7 @@ def hook(raw, host="codex"):
     conf = confidence(intent, score, why)
     if os.environ.get("GENIE_DEBUG"):
         sys.stderr.write("genie: %s score=%.2f conf=%s via=%s\n" % (intent, score, conf, why))
+    log_route(text, intent, score, why, conf)
     lines = ["genie: intent=%s conf=%s" % (intent, conf)]
     try:
         sys.path.insert(0, HERE)

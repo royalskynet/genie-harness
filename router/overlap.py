@@ -20,6 +20,7 @@ Anything that resolves into the Genie checkout itself is ignored.
 ponytail: name-signature matching, so an unrecognised tool with a bland name is
 missed. Add its signature to SIGNATURES when that happens.
 """
+import glob
 import json
 import os
 import re
@@ -135,6 +136,28 @@ def scan(home=None, dirs=None):
                 if cap != "guard" and rx.search(n):
                     found[cap].add(n.lower())
     return {c: sorted(v) for c, v in found.items() if v}
+
+
+# Tools Genie works better next to but never installs: a new device should not
+# inherit one person's setup. Suggested once, on the first run, only if absent.
+COMPANIONS = (
+    ("ponytail", "keeps the code it writes minimal: stdlib and what is already "
+                 "installed before anything new",
+     "Claude Code `/plugin marketplace add DietrichGebert/ponytail` then "
+     "`/plugin install ponytail@ponytail`; Codex `codex plugin marketplace add "
+     "DietrichGebert/ponytail` then install it from `/plugins`"),
+)
+
+
+def missing_companions(found):
+    """-> [(name, why, how)] for companions not seen by scan() nor in Codex's plugin cache."""
+    names = {n for v in found.values() for n in v}
+    out = []
+    for name, why, how in COMPANIONS:
+        cache = glob.glob(os.path.join(codex_home(), "plugins", "cache", "*", name))
+        if not any(name in n for n in names) and not (cache and not on_claude()):
+            out.append((name, why, how))
+    return out
 
 
 if __name__ == "__main__":

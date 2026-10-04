@@ -47,6 +47,8 @@ Skill 名稱：Codex 寫 `$wheel`，Claude Code 用 Skill 工具調 `genie-harne
 
 注入出現 `OVERLAP:` ＝另一個已裝的工具也在做同一件事（`guard`／`research`／`style`）：**問他一次**交給誰，跟其他問題併在同一則訊息，他選了就跑注入裡那行 `set owner`。他選 Genie 時關掉另一個工具是改**他的**設定：列出確切改動，等他說好。閘門也一樣：他親自交出去，Genie 就讓開；他移除那個工具，Genie 就接回來。
 
+注入出現 `DUPLICATE:` ＝ Genie 自己的零件在別處多一份（例如私版 `wheel` skill、另一份 wheel registry）。兩份會各自漂移，輪子卡分散後第 0 步會漏掉舊決定。照注入那行做：差異搬進使用者的 CLAUDE.md／AGENTS.md，registry 合併到 `~/.wheel`，刪除私版前列出確切路徑等他說好。只提一次。
+
 ## 意圖標籤
 
 每個標籤該做的事寫在注入的 `DO:` 行，這裡只列它是什麼。

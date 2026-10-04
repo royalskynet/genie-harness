@@ -440,6 +440,33 @@ def test_overlap_scan_claude_host(fails):
            "claude host: settings.json hooks + skills + enabled plugins (not genie, not disabled)", fails)
 
 
+def test_duplicate_wheel_and_registry(fails):
+    """A private copy of $wheel splits wheel cards across registries: flag it once."""
+    with tempfile.TemporaryDirectory() as td:
+        sk = os.path.join(td, "skills")
+        os.makedirs(os.path.join(sk, "wheel"))
+        os.makedirs(os.path.join(td, "wheel"))
+        open(os.path.join(td, "wheel", "registry.tsv"), "w").close()
+        old = os.environ.get("CLAUDE_CONFIG_DIR")
+        os.environ["CLAUDE_CONFIG_DIR"] = td
+        try:
+            dups = overlap.duplicates([sk])
+            eq(sorted(k.split(":")[1] for k, _ in dups), ["registry", "skill"],
+               "private wheel copy and its registry are both flagged", fails)
+            eq(_real_scan(home=td, dirs=[sk]).get("research"), None,
+               "a wheel copy is a duplicate, not a research overlap", fails)
+            path = os.path.join(td, "prefs.json")
+            eq(len(prefs.resolve("hi", path=path, found={}, dups=dups)["duplicates"]), 2,
+               "first turn raises both", fails)
+            eq(prefs.resolve("hi", path=path, found={}, dups=dups)["duplicates"], [],
+               "raised once, not every turn", fails)
+        finally:
+            os.environ.pop("CLAUDE_CONFIG_DIR", None) if old is None else os.environ.__setitem__("CLAUDE_CONFIG_DIR", old)
+        eq([k for k, _ in overlap.duplicates([os.path.join(overlap.GENIE_DIR, "skills")])
+            if k.startswith("dup:skill:")], [],
+           "genie's own wheel is never a duplicate", fails)
+
+
 def test_hook_shape_and_fail_open(fails):
     with tempfile.TemporaryDirectory() as td:
         path = os.path.join(td, "prefs.json")

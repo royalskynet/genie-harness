@@ -29,6 +29,7 @@ Hook: `genie_router.py [--host codex|claude]` with the hook JSON on stdin.
 import json
 import os
 import re
+import shutil
 import sys
 import time
 import unicodedata
@@ -299,6 +300,10 @@ DO_NO_WHEEL = {
 }
 
 
+FIXINDEX_FIRST = (" Before anything else run `fixindex find \"<exact error>\"` (their fix log); "
+                  "follow a matching entry. After the fix, record it with `fixindex fi`.")
+
+
 def dispatch(intent, res, host="codex"):
     """-> the `DO:` line. `res` is prefs.resolve(); research off or handed to
     another tool changes who looks for prior art, never whether we ask first."""
@@ -318,6 +323,9 @@ def dispatch(intent, res, host="codex"):
         wheel = ref % "wheel"
     names = ("genie-execute", "genie-explain", "genie-terms")
     line = "DO: " + do.format(wheel=wheel, **{n: ref % n for n in names})
+    # The user's own fix log knows this machine's past breakages; ask it before the web.
+    if intent == "fix_request" and shutil.which("fixindex"):
+        line += FIXINDEX_FIRST
     if res.get("level") in LOCAL_TOOL_LEVELS and intent in LOCAL_TOOL_INTENTS:
         line += LOCAL_TOOLS
     return line

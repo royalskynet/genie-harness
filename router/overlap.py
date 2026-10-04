@@ -24,6 +24,7 @@ import glob
 import json
 import os
 import re
+import shutil
 
 GENIE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -146,17 +147,23 @@ COMPANIONS = (
      "Claude Code `/plugin marketplace add DietrichGebert/ponytail` then "
      "`/plugin install ponytail@ponytail`; Codex `codex plugin marketplace add "
      "DietrichGebert/ponytail` then install it from `/plugins`"),
+    ("fixindex", "a personal fix log: every bug fixed once is found again by its error "
+                 "text, and Genie's fix requests check it first",
+     "`git clone https://github.com/royalskynet/fixindex.git ~/dev/fixindex && "
+     "ln -s ~/dev/fixindex/fixindex ~/.local/bin/fixindex`"),
 )
 
 
 def missing_companions(found):
-    """-> [(name, why, how)] for companions not seen by scan() nor in Codex's plugin cache."""
+    """-> [(name, why, how)] for companions not on PATH, not seen by scan(), and
+    not in Codex's plugin cache."""
     names = {n for v in found.values() for n in v}
     out = []
     for name, why, how in COMPANIONS:
         cache = glob.glob(os.path.join(codex_home(), "plugins", "cache", "*", name))
-        if not any(name in n for n in names) and not (cache and not on_claude()):
-            out.append((name, why, how))
+        if shutil.which(name) or any(name in n for n in names) or (cache and not on_claude()):
+            continue
+        out.append((name, why, how))
     return out
 
 

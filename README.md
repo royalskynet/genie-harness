@@ -91,6 +91,8 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else gi
 
 需要：Codex CLI（hooks 已是 stable）、Python 3.9+、numpy。第一次會下載 ~512 MB 模型，處理後只留 ~35 MB（執行期 RSS 58 MB）。若 Homebrew Python 的 pip 顯示 `externally-managed-environment`，可用 `python3 -m pip install --user --break-system-packages numpy` 把 numpy 裝到使用者套件目錄。
 
+平台：macOS 實測可用。Linux 沒有用到 macOS 專屬指令，但沒有實測。Windows 原生不支援（hook 是 sh 腳本）；WSL 視同 Linux，也沒有實測。
+
 一鍵安裝可重複執行：`~/genie-harness` 已是 clone 時改為 pull 更新，再重跑 install.sh。已安裝、只想更新：
 
 ```bash
@@ -202,7 +204,7 @@ Per-class：`ambiguous_request` 12/13、`build_request` 10/10、`clear_request` 
 
 - `rm -rf ~/Documents` 是警告，不是擋下。無法可靠區分專案資料夾和個人資料，硬猜會擋掉真正的工作。這裡的邊界是 Codex 的 sandbox 與 approval。
 - 閘門是正則減速帶，不是安全邊界。它抓明顯的災難指令，但不是全部。邊界是 Codex 的 sandbox + approval。
-- Claude Code：重複工具偵測（`overlap.py`）會讀 `~/.claude/settings.json` 的 hooks 和 `~/.claude/skills`，但不讀其他 plugin 內建的 hooks；那種閘門偵測不到，兩個會同時跑。
+- Claude Code：重複工具偵測（`overlap.py`）會讀 `~/.claude/settings.json` 的 hooks、已啟用 plugin 的名稱和 `~/.claude/skills`，但不讀 plugin 內建 hooks 的內容；名稱看不出用途的 plugin 偵測不到，兩個會同時跑。
 - 沒附 Codex plugin manifest（`.codex-plugin/`）；Codex 走 `install.sh` 安裝。
 - `PREMORTEM.md` 列出 30 條預測失效模式與各自的預防設計。
 
@@ -297,6 +299,8 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else gi
 ```
 
 Requirements: Codex CLI (hooks are stable), Python 3.9+, numpy. First run downloads ~512 MB of model data; after processing, ~35 MB on disk (58 MB RSS at runtime). If pip reports `externally-managed-environment` for Homebrew Python, install numpy in the user site with `python3 -m pip install --user --break-system-packages numpy`.
+
+Platforms: tested on macOS. Linux uses no macOS-only commands but is untested. Native Windows is not supported (the hooks are sh scripts); WSL should behave like Linux, also untested.
 
 **What install.sh touches (re-runs preserve the first `*.bak-genie` backup):**
 
@@ -409,7 +413,7 @@ The class that must never be wrong is `risky_action` — a wrong label there mea
 
 - `rm -rf ~/Documents` is warned, not denied. There is no reliable way to tell a project checkout from personal data, and inventing a fuzzy heuristic would block real work. Codex's sandbox and approval are the boundary here.
 - The guard is a regex speed bump, not a security boundary. It catches the obvious catastrophic commands; it does not catch everything. The boundary is Codex's sandbox + approval.
-- Claude Code: the overlapping-tool scan (`overlap.py`) reads `~/.claude/settings.json` hooks and `~/.claude/skills`, but not hooks shipped inside other plugins; such a guard is not detected and both run.
+- Claude Code: the overlapping-tool scan (`overlap.py`) reads `~/.claude/settings.json` hooks, the names of enabled plugins, and `~/.claude/skills`, but not the contents of hooks shipped inside plugins; a plugin whose name doesn't reveal its role is not detected and both run.
 - Codex plugin manifest (`.codex-plugin/`) is not shipped; Codex installs via `install.sh`.
 - `PREMORTEM.md` lists 30 predicted failure modes and the countermeasure for each.
 

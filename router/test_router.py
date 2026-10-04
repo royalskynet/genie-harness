@@ -147,12 +147,109 @@ def test_dispatch(fails):
                 fails.append("dispatch %s: unfilled placeholder: %r" % (intent, out))
 
 
+def test_route_log(fails):
+    """The calibration log: one redacted JSONL line per prompt, honours GENIE_LOG,
+    rotates, and never breaks the hook. Fail-open is the property that matters --
+    a log that can lose a prompt must not be able to cost one."""
+    import io, contextlib, shutil, tempfile
+    tmp = tempfile.mkdtemp()
+    env = {k: os.environ.pop(k, None) for k in ("GENIE_LOG",)}
+    old_home = os.environ.get("HOME")
+    try:
+        def logged(prompt="幫我把專案跑起來 sk-abcdefghijklmnopqrstuvwxyz123456", **kw):
+            """-> parsed records at the configured log path."""
+            path = kw.get("path") or os.path.join(tmp, "route.log")
+            os.environ["GENIE_LOG"] = kw.get("genie_log", path)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                ctx = r.hook(json.dumps({"prompt": prompt}), "claude")
+            if not ctx or "DO:" not in ctx:
+                fails.append("route log: hook lost its DO line (ctx=%r)" % ctx)
+            if not os.path.exists(path):
+                return []
+            return [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
+
+        recs = logged()
+        if len(recs) != 1:
+            fails.append("route log: want 1 record, got %d" % len(recs))
+        else:
+            rec = recs[0]
+            for key in ("ts", "intent", "score", "via", "conf", "text"):
+                if key not in rec:
+                    fails.append("route log: missing field %r in %r" % (key, rec))
+            if rec.get("intent") != "execute_request":
+                fails.append("route log: intent %r (want execute_request)" % rec.get("intent"))
+            if rec.get("score") != round(rec.get("score", -1), 2):
+                fails.append("route log: score not 2dp: %r" % rec.get("score"))
+            if "abcdefghijklmnop" in json.dumps(rec, ensure_ascii=False):
+                fails.append("route log: token leaked into the log: %r" % rec)
+            if "[REDACTED]" not in rec.get("text", ""):
+                fails.append("route log: 24+ char run was not redacted: %r" % rec.get("text"))
+            if not rec["text"].startswith("幫我把專案跑起來"):
+                fails.append("route log: text truncated wrongly: %r" % rec["text"])
+
+        # appends, not overwrites: one line per prompt
+        logged()
+        lines = [l for l in open(os.path.join(tmp, "route.log"), encoding="utf-8") if l.strip()]
+        if len(lines) != 2:
+            fails.append("route log: second prompt did not append a second line")
+
+        # 200-char cap
+        os.remove(os.path.join(tmp, "route.log"))
+        long_recs = logged(prompt="幫我" + "跑起來 " * 80)
+        if len(long_recs[0]["text"]) > 200:
+            fails.append("route log: text not capped at 200 chars (%d)"
+                         % len(long_recs[0]["text"]))
+
+        # GENIE_LOG=0 opts out and creates nothing
+        os.remove(os.path.join(tmp, "route.log"))
+        os.environ["HOME"] = tmp
+        os.environ["GENIE_LOG"] = "0"
+        r.hook(json.dumps({"prompt": "幫我把專案跑起來"}), "claude")
+        if os.path.exists(os.path.join(tmp, ".genie", "route.log")):
+            fails.append("route log: GENIE_LOG=0 still wrote ~/.genie/route.log")
+
+        # unset GENIE_LOG -> ~/.genie/route.log, directory created
+        del os.environ["GENIE_LOG"]
+        r.hook(json.dumps({"prompt": "幫我把專案跑起來"}), "claude")
+        if not os.path.exists(os.path.join(tmp, ".genie", "route.log")):
+            fails.append("route log: default path not written")
+
+        # unwritable path: swallowed, hook still speaks
+        os.environ["GENIE_LOG"] = "/nonexistent/x/r.log"
+        ctx = r.hook(json.dumps({"prompt": "幫我把專案跑起來"}), "claude")
+        if "DO:" not in ctx or "genie: intent=" not in ctx:
+            fails.append("route log: unwritable log broke the hook: %r" % ctx)
+
+        # rotation: an oversized log becomes route.log.1 and a new one starts
+        big = os.path.join(tmp, "big.log")
+        with open(big, "w", encoding="utf-8") as fh:
+            fh.write("x" * (r.LOG_MAX_BYTES + 1))
+        logged(genie_log=big, path=big)
+        if not os.path.exists(big + ".1"):
+            fails.append("route log: oversized log was not rotated to route.log.1")
+        if os.path.getsize(big) > r.LOG_MAX_BYTES:
+            fails.append("route log: new log still over the cap after rotation")
+    finally:
+        for k, v in env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        if old_home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = old_home
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     fails = []
     test_dispatch(fails)
     run_cases(CASES, fails, "boundary")
     run_eval_set(fails)
     test_missing_model_warns(fails)
+    test_route_log(fails)
     # fallback must never crash
     r.MODEL_DIR = "/nonexistent"
     r._cache.clear()

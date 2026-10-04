@@ -287,6 +287,31 @@ def test_companions_suggested_once_never_installed(fails):
             del os.environ["CODEX_HOME"]
 
 
+def test_fixindex_detected_suggested_and_used(fails):
+    """Absent: suggested on first run. Present: not suggested, and a fix request
+    is told to check it first. Absent again: the fix line never names it."""
+    import genie_router as gr
+    old = os.environ.get("PATH", "")
+    with tempfile.TemporaryDirectory() as td:
+        try:
+            os.environ["PATH"] = td
+            p = os.path.join(td, "prefs.json")
+            ctx = prefs.render_context(prefs.resolve("hi", path=p, found={}, persist=False))
+            eq("OPTIONAL, not installed: fixindex" in ctx, True, "fixindex absent -> suggested", fails)
+            res = prefs.resolve("x", data={}, persist=False)
+            eq("fixindex" in gr.dispatch("fix_request", res), False, "absent -> not named", fails)
+            exe = os.path.join(td, "fixindex")
+            with open(exe, "w") as fh:
+                fh.write("#!/bin/sh\n")
+            os.chmod(exe, 0o755)
+            ctx = prefs.render_context(prefs.resolve("hi", path=p, found={}, persist=False))
+            eq("not installed: fixindex" in ctx, False, "fixindex present -> silent", fails)
+            eq("fixindex find" in gr.dispatch("fix_request", res), True, "present -> fix checks it", fails)
+            eq("fixindex" in gr.dispatch("clear_request", res), False, "only fix requests", fails)
+        finally:
+            os.environ["PATH"] = old
+
+
 def test_blocks_cannot_disable_enforcement(fails):
     """B1. Every block off, a hostile prefs file, guard must still deny."""
     with tempfile.TemporaryDirectory() as td:

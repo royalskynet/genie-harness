@@ -147,6 +147,38 @@ def test_dispatch(fails):
                 fails.append("dispatch %s: unfilled placeholder: %r" % (intent, out))
 
 
+def test_local_tools_follow_level(fails):
+    """Advanced/expert users are pointed at what is already installed; the rest
+    are not. Wheel answers "does a wheel exist?", this asks the narrower question
+    (`which`, `--help`, the skills already listed) that only a senior reader can
+    act on, so handing it to a beginner is noise."""
+    phrase = "already on this machine"
+    on = {"blocks": {"research": "on"}}
+    for intent in r.LOCAL_TOOL_INTENTS:
+        for lvl in r.LOCAL_TOOL_LEVELS:
+            out = r.dispatch(intent, dict(on, level=lvl), "codex")
+            if phrase not in out or "--help" not in out:
+                fails.append("dispatch %s/%s: no local-tools steer: %r" % (intent, lvl, out))
+        for lvl in ("beginner", "intermediate"):
+            out = r.dispatch(intent, dict(on, level=lvl), "codex")
+            if phrase in out:
+                fails.append("dispatch %s/%s: local-tools steer for a %s: %r"
+                             % (intent, lvl, lvl, out))
+    # not an intent where "just run what is here" is the right instruction
+    for intent in ("teach_me", "user_confused", "risky_action", "ambiguous_request",
+                   "continue", r.UNSURE):
+        out = r.dispatch(intent, dict(on, level="expert"), "codex")
+        if phrase in out:
+            fails.append("dispatch %s/expert: local-tools steer where it does not belong: %r"
+                         % (intent, out))
+    # and it must not break the rest of the line
+    for intent in r.LOCAL_TOOL_INTENTS:
+        out = r.dispatch(intent, {"level": "advanced",
+                                  "blocks": {"research": "off"}}, "codex")
+        if "{" in out or re.search(r"MUST be (?![$\w])", out):
+            fails.append("dispatch %s: local-tools steer leaked a placeholder: %r" % (intent, out))
+
+
 def test_route_log(fails):
     """The calibration log: one redacted JSONL line per prompt, honours GENIE_LOG,
     rotates, and never breaks the hook. Fail-open is the property that matters --
@@ -246,6 +278,7 @@ def test_route_log(fails):
 def main():
     fails = []
     test_dispatch(fails)
+    test_local_tools_follow_level(fails)
     run_cases(CASES, fails, "boundary")
     run_eval_set(fails)
     test_missing_model_warns(fails)

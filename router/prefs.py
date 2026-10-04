@@ -103,7 +103,9 @@ BLOCK_MEANING = {
 # how a turn reads depends on what was asked, not on how much the user likes verbosity.
 ALWAYS = (
     "answer in the user's language (Traditional Chinese: Taiwan terms, 軟體/程式/網路)",
-    "ask only when a wrong guess would waste real work; batch every question into one message",
+    "decide and proceed: recommend one option and do it; stop to ask only when it is "
+    "irreversible or a wrong guess means redoing the whole result; batch every question "
+    "into one message",
     "say plainly when you do not know",
     # ASD-STE100-style clarity, at every level and under any style tool: a misread
     # is a wrong action. Detail lives in genie-humanizer.

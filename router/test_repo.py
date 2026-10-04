@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -196,6 +197,23 @@ def test_eval_set_is_labelled_honestly(fails):
         fails.append("C1: router/eval_set.json does not say it is a hand-written dev "
                      "set. These cases are self-authored, so an accuracy number from "
                      "them is a regression baseline, not evidence of generalisation.")
+
+
+def test_install_smoke_matches_router(fails):
+    """install.sh's prefs smoke grep must match what the router prints today.
+    test_install.py runs on a stub repo with no router, so it never reaches it."""
+    sh = read(os.path.join(ROOT, "install.sh"))
+    m = re.search(r'"什麼是 hook"\}\'.*?grep -q "([^"]+)"', sh, re.S)
+    if not m:
+        fails.append("install.sh: prefs smoke test not found")
+        return
+    with tempfile.TemporaryDirectory() as td:
+        out = subprocess.run(
+            [sys.executable, os.path.join(ROOT, "router", "genie_router.py")],
+            input='{"prompt":"什麼是 hook"}', capture_output=True, text=True,
+            env=dict(os.environ, GENIE_PREFS=os.path.join(td, "p.json"), GENIE_LOG="0")).stdout
+    if not re.search(m.group(1), out):
+        fails.append("install.sh prefs smoke grep %r no longer matches router output" % m.group(1))
 
 
 def main():

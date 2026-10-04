@@ -13,6 +13,7 @@
     {"text": "run the tests", "want": "execute_request"},
     {"text": "install the dependencies and start it", "want": "execute_request"},
     {"text": "deploy this to vercel", "want": "execute_request"},
+    {"text": "可以幫我把專案跑起來嗎", "want": "execute_request"},
 
     {"text": "幫我改一下 README", "want": "clear_request"},
     {"text": "幫我改 README.md", "want": "clear_request"},
@@ -66,6 +67,13 @@
     {"text": "有沒有辦法讓它變快", "want": "ambiguous_request"},
     {"text": "make me an app", "want": "ambiguous_request"},
     {"text": "can you make this faster somehow", "want": "ambiguous_request"},
+
+    {"text": "能幫我拍片嗎", "want": "ambiguous_request"},
+    {"text": "你會畫畫嗎", "want": "ambiguous_request"},
+    {"text": "可以幫我做影片嗎", "want": "ambiguous_request"},
+    {"text": "你可以幫我寫程式嗎", "want": "ambiguous_request"},
+    {"text": "你能不能幫我買東西嗎", "want": "ambiguous_request"},
+    {"text": "你會不會煮飯嗎", "want": "ambiguous_request"},
 
     {"text": "你剛剛說的我聽不懂", "want": "user_confused"},
     {"text": "什麼意思", "want": "user_confused"},

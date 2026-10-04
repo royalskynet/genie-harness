@@ -237,6 +237,20 @@ def test_clarity_survives_level_and_style_handoff(fails):
         eq(rule in prefs.render_context(res), True, "clarity survives style handoff", fails)
 
 
+def test_decide_and_proceed_at_every_level(fails):
+    """The standing instruction is to pick an option and do it, and to stop only
+    for the irreversible or the redo-the-whole-result case. Not a preference: it
+    reaches every level and no block can mute it."""
+    for lvl in prefs.LEVELS:
+        ctx = prefs.render_context(prefs.resolve("hi", data={"level": lvl}, persist=False))
+        if "decide and proceed" not in ctx:
+            fails.append("decide-and-proceed missing at %s" % lvl)
+        if "ask only when a wrong guess" in ctx:
+            fails.append("retired ask-only phrasing still injected at %s" % lvl)
+    if not any("decide and proceed" in a for a in prefs.ALWAYS):
+        fails.append("decide-and-proceed is not in ALWAYS (so it is tunable)")
+
+
 def test_blocks_cannot_disable_enforcement(fails):
     """B1. Every block off, a hostile prefs file, guard must still deny."""
     with tempfile.TemporaryDirectory() as td:

@@ -251,6 +251,42 @@ def test_decide_and_proceed_at_every_level(fails):
         fails.append("decide-and-proceed is not in ALWAYS (so it is tunable)")
 
 
+def test_stop_cases_and_pinned_lang(fails):
+    """The per-turn stop rule names all 4 stop cases, not just 'irreversible': a
+    narrower list here would talk the model out of stopping before a publish.
+    A pinned language overrides follow-their-language, for users whose own rules
+    say 'always reply in X'."""
+    ctx = prefs.render_context(prefs.resolve("Can you add a login page", data={}, persist=False))
+    for w in ("cannot be undone", "seen by others", "costs money", "someone else's rules"):
+        if w not in ctx:
+            fails.append("stop case missing from injection: %s" % w)
+    eq("answer in the user's language" in ctx, True, "default follows their language", fails)
+    ctx = prefs.render_context(prefs.resolve("Can you add a login page",
+                                             data={"lang": "Traditional Chinese"}, persist=False))
+    eq("always answer in Traditional Chinese, even when" in ctx, True, "pinned lang", fails)
+    eq("answer in the user's language" in ctx, False, "pinned lang replaces default", fails)
+
+
+def test_companions_suggested_once_never_installed(fails):
+    """A new device gets a one-line suggestion on the first run, only when the
+    companion is absent, and is told not to install it."""
+    with tempfile.TemporaryDirectory() as td:
+        os.environ["CODEX_HOME"] = td
+        try:
+            p = os.path.join(td, "prefs.json")
+            ctx = prefs.render_context(prefs.resolve("hi", path=p, found={}, persist=False))
+            eq("OPTIONAL, not installed: ponytail" in ctx, True, "absent -> suggested", fails)
+            eq("Do not install it yourself" in ctx, True, "never auto-install", fails)
+            ctx = prefs.render_context(prefs.resolve("hi", path=p, persist=False,
+                                                     found={"style": ["ponytail"]}))
+            eq("OPTIONAL" in ctx, False, "present -> silent", fails)
+            prefs.save({"level": "beginner"}, p)
+            ctx = prefs.render_context(prefs.resolve("hi", path=p, found={}, persist=False))
+            eq("OPTIONAL" in ctx, False, "not first run -> silent", fails)
+        finally:
+            del os.environ["CODEX_HOME"]
+
+
 def test_blocks_cannot_disable_enforcement(fails):
     """B1. Every block off, a hostile prefs file, guard must still deny."""
     with tempfile.TemporaryDirectory() as td:

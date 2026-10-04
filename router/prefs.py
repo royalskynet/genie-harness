@@ -96,9 +96,10 @@ BLOCKS = tuple(LEVEL_DEFAULTS["beginner"].keys())
 # how a turn reads depends on what was asked, not on how much the user likes verbosity.
 ALWAYS = (
     "answer in the user's language (Traditional Chinese: Taiwan terms, 軟體/程式/網路)",
-    "decide and proceed: recommend one option and do it; stop to ask only when it is "
-    "irreversible or a wrong guess means redoing the whole result; batch every question "
-    "into one message",
+    "decide and proceed: recommend one option and do it; stop to ask only for the 4 "
+    "stop cases (cannot be undone, seen by others, costs money or system settings, "
+    "changes someone else's rules) or when a wrong guess means redoing the whole result; "
+    "batch every question into one message",
     "say plainly when you do not know",
     # ASD-STE100-style clarity, at every level and under any style tool: a misread
     # is a wrong action. Detail lives in genie-humanizer.
@@ -225,6 +226,11 @@ def _blank(data):
     seen = data.get("seen")
     if isinstance(seen, list):
         out["seen"] = [s for s in seen if isinstance(s, str)][:200]
+    # A pinned reply language, for a user whose own rules say "always X" even when
+    # they type in another language. Free text, so it is length-capped.
+    lang = data.get("lang")
+    if isinstance(lang, str) and lang.strip():
+        out["lang"] = lang.strip()[:40]
     return out
 
 
@@ -411,6 +417,8 @@ def resolve(prompt=None, data=None, persist=True, path=None, found=None):
         "first_run": first_run,
         "ask_owner": ask,
         "handed_off": {c: o for c, o in handed.items() if o},
+        "lang": data.get("lang"),
+        "missing": overlap.missing_companions(found) if first_run else [],
     }
 
 
@@ -438,6 +446,9 @@ def render_context(res, host="codex"):
         lines.append("register: " + REGISTER.get(res["level"], REGISTER["beginner"]))
     if res.get("first_run"):
         lines.append(ONBOARDING)
+        for name, why, how in res.get("missing", []):
+            lines.append("OPTIONAL, not installed: %s (%s). Mention it once, in one line, "
+                         "with how to add it: %s. Do not install it yourself." % (name, why, how))
     if res["changes"]:
         lines.append("changed this message: " + "; ".join(res["changes"]))
     for cap, names in sorted(res.get("ask_owner", {}).items()):
@@ -463,7 +474,10 @@ def render_context(res, host="codex"):
                 " (you set this)" if name in res["pinned"] else ""))
         dial.append("%s=%s%s" % (name, res["blocks"][name], mark))
     lines.append("blocks: " + " ".join(dial))
-    lines.append("not preference-tunable, always on: " + "; ".join(ALWAYS))
+    always = list(ALWAYS)
+    if res.get("lang"):
+        always[0] = "always answer in %s, even when they write in another language" % res["lang"]
+    lines.append("not preference-tunable, always on: " + "; ".join(always))
     if handed.get("guard"):
         lines.append("catastrophic-command gate: handed to %s by the user; Genie's guard "
                      "stands down while %s is installed. %s still apply."
@@ -478,6 +492,7 @@ USAGE = """genie prefs
   (no args)                 show current settings
   set level <l>             beginner | intermediate | advanced | expert
   set owner <job> <who>     guard | research | style -> genie or the other tool
+  set lang <language>       always reply in it (e.g. "Traditional Chinese"); "off" to follow theirs
   set <block> <state>       %s
   clear <block>             back to following your level
   reset                     forget everything
@@ -496,6 +511,8 @@ def main(argv):
             print("  %-9s %-4s (%s)" % (b, block_state(b, data), src))
         for cap, who in sorted(data.get("owners", {}).items()):
             print("owner: %-8s %s" % (cap, who))
+        if data.get("lang"):
+            print("lang: %s" % data["lang"])
         print("file: %s" % p)
         return 0
     if args[0] == "path":
@@ -518,6 +535,11 @@ def main(argv):
                 print("usage: set owner <%s> <genie|tool>" % "|".join(overlap.CAPS))
                 return 2
             data.setdefault("owners", {})[val] = args[3].lower()
+        elif key == "lang":
+            if val in ("", "off"):
+                data.pop("lang", None)
+            else:
+                data["lang"] = " ".join(args[2:])[:40]
         elif key in BLOCKS:
             if val not in STATES:
                 print("%s must be one of: %s" % (key, ", ".join(STATES)))

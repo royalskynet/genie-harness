@@ -315,12 +315,28 @@ def test_machine_turns_are_not_classified(fails):
         fails.append("machine-turn filter swallowed a real question: %r" % ctx)
 
 
+def test_bad_envelope_is_not_a_prompt(fails):
+    """stdin on the hook path is always the host's JSON. An unparseable payload
+    used to fall through as the prompt, so the envelope got classified by
+    whatever words it happened to contain."""
+    for raw in ('{"prompt": "錯誤訊息" truncated',   # host wrote a partial line
+                '["錯誤訊息"]',                      # valid JSON, wrong shape
+                '"錯誤訊息"',
+                ''):
+        if r.hook(raw, "claude") != "":
+            fails.append("bad envelope was classified: %r" % raw[:40])
+    # a well-formed envelope still routes
+    if "intent=" not in r.hook(json.dumps({"prompt": "幫我把專案跑起來"}), "claude"):
+        fails.append("envelope check swallowed a real prompt")
+
+
 def main():
     fails = []
     test_dispatch(fails)
     test_local_tools_follow_level(fails)
     test_abstain_is_silent(fails)
     test_machine_turns_are_not_classified(fails)
+    test_bad_envelope_is_not_a_prompt(fails)
     run_cases(CASES, fails, "boundary")
     run_eval_set(fails)
     test_missing_model_warns(fails)

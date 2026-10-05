@@ -202,7 +202,7 @@ def test_route_log(fails):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 ctx = r.hook(json.dumps({"prompt": prompt}), "claude")
-            if not ctx or "DO:" not in ctx:
+            if kw.get("want_do", True) and (not ctx or "DO:" not in ctx):
                 fails.append("route log: hook lost its DO line (ctx=%r)" % ctx)
             if not os.path.exists(path):
                 return []
@@ -235,7 +235,7 @@ def test_route_log(fails):
 
         # 200-char cap
         os.remove(os.path.join(tmp, "route.log"))
-        long_recs = logged(prompt="幫我" + "跑起來 " * 80)
+        long_recs = logged(prompt="幫我" + "跑起來 " * 80, want_do=False)
         if len(long_recs[0]["text"]) > 200:
             fails.append("route log: text not capped at 200 chars (%d)"
                          % len(long_recs[0]["text"]))
@@ -343,6 +343,32 @@ def test_low_conf_gives_no_order(fails):
         r.classify, r.confidence = saved
 
 
+def test_long_regex_hit_is_a_guess(fails):
+    """A keyword inside a long message is usually incidental: real log had
+    「…commit 是什麼 是否有必要」 and 「…小白安裝之後…」 both sent to teach_me with a
+    DO line. Past regex_sure_len the hit keeps its tag at conf=low, no DO.
+    Short hits stay sure, and risky_action stays sure at any length."""
+    long_q = ("不考慮更新上游嗎？也許有優越之處？也紀錄下本機的commit是什麼"
+              "是否有必要。按照原設計是否不該有bash這些？")
+    intent, _, why = r.classify(long_q)
+    conf = r.confidence(intent, _, why)
+    if conf != "low" or not why.startswith("regex-long:"):
+        fails.append("long regex hit still sure: %s %s %s" % (intent, conf, why))
+    ctx = r.hook(json.dumps({"prompt": long_q}), "claude")
+    if "DO:" in ctx:
+        fails.append("long regex hit still gave a DO line: %r" % ctx[:120])
+    intent, s_, why = r.classify("什麼是 hook")
+    if r.confidence(intent, s_, why) != "high":
+        fails.append("short regex hit lost conf=high: %s %s" % (intent, why))
+    risky = "幫我把這個分支整理一下然後 force push 上去，舊的那些 commit 都不要了，順便把說明也改一改"
+    intent, s_, why = r.classify(risky)
+    if intent != "risky_action" or r.confidence(intent, s_, why) != "high":
+        fails.append("long risky_action softened: %s %s" % (intent, why))
+    intent, _, why = r.classify("對小白來說是讓位優先")
+    if why.startswith("regex:"):
+        fails.append("小白 still a regex keyword: %s %s" % (intent, why))
+
+
 def test_machine_turns_are_not_classified(fails):
     """UserPromptSubmit also carries turns nobody typed. Those get no injection
     at all: a label on a background-task report dispatches skills for work the
@@ -383,6 +409,7 @@ def main():
     test_local_tools_follow_level(fails)
     test_abstain_is_silent(fails)
     test_low_conf_gives_no_order(fails)
+    test_long_regex_hit_is_a_guess(fails)
     test_machine_turns_are_not_classified(fails)
     test_bad_envelope_is_not_a_prompt(fails)
     run_cases(CASES, fails, "boundary")

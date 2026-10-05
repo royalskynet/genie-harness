@@ -429,6 +429,30 @@ def test_coexist_is_told_not_arbitrated(fails):
         eq(after, before, "a coexist owner marker changes no block", fails)
 
 
+def test_overlap_folds_in_before_handing_over(fails):
+    """A fight is worth ending, not muting: fold the other tool in, then drop it.
+
+    The failure this pins: handing the job over leaves both tools installed with
+    one of them silent, and the next person who installs only Genie gains nothing.
+    Genie must also never be the one told to step aside -- most users have no
+    second tool, so a Genie that stands down leaves them with no check at all.
+    """
+    found = {"guard": ["some-guard"], "style": ["some-style"]}
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "prefs.json")
+        ctx = prefs.render_context(prefs.resolve("hi", path=path, found=found))
+        eq("OVERLAP:" in ctx, True, "OVERLAP still raised", fails)
+        eq("move into Genie" in ctx, True, "folding in is offered first", fails)
+        eq("Removing their tool is their call" in ctx, True, "removal needs a yes", fails)
+        eq(ctx.index("move into Genie") < ctx.index("who should own it"), True,
+           "folding in comes before arbitration", fails)
+    for cap in sorted(set(overlap.CAPS) - set(overlap.NOTIFY)):
+        advice = overlap.RECOMMEND[cap]
+        eq(advice.startswith("suggest {other}"), False,
+           "`%s` must not tell Genie to step aside" % cap, fails)
+        eq("Genie" in advice, True, "`%s` advice says where Genie stands" % cap, fails)
+
+
 def test_every_capability_is_detectable(fails):
     """Each standing Genie capability must be scannable, or an overlap goes unseen.
 

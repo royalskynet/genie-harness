@@ -464,13 +464,15 @@ def render_context(res, host="codex"):
     for cap, names in sorted(res.get("ask_owner", {}).items()):
         other = "/".join(names)
         lines.append(
-            "OVERLAP: %s also does `%s` (%s). Ask the user once, in the same message as "
-            "anything else you ask, who should own it, with this advice: %s. On their "
-            "answer run `%s set owner %s <genie|%s>`. If they pick Genie, offer to turn "
-            "%s's version off, show the exact change and wait for a yes (it is their "
-            "config, not Genie's)." % (other, cap, overlap.CAPS[cap],
-                                       overlap.RECOMMEND[cap].format(other=other),
-                                       CLI, cap, names[0], other))
+            "OVERLAP: %s also does `%s` (%s). Two tools doing one job is worth ending, "
+            "not just muting: %s -- ask the user once, in the same message as anything "
+            "else you ask, who should own it, with this advice: %s. "
+            "On their answer run `%s set owner %s <genie|%s>`. If they pick Genie, offer "
+            "to turn %s's version off, show the exact change and wait for a yes (it is "
+            "their config, not Genie's)." % (other, cap, overlap.CAPS[cap],
+                                             overlap.ABSORB.format(other=other),
+                                             overlap.RECOMMEND[cap].format(other=other),
+                                             CLI, cap, names[0], other))
     for cap, names in sorted(res.get("coexist", {}).items()):
         other = "/".join(names)
         lines.append(

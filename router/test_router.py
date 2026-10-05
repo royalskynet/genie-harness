@@ -233,6 +233,24 @@ def test_route_log(fails):
             fails.append("route log: text not capped at 200 chars (%d)"
                          % len(long_recs[0]["text"]))
 
+        # GENIE_REPLAY marks the record instead of dropping it: measuring a
+        # routing change means replaying the log through the router, and those
+        # writes have to stay separable from live traffic afterwards.
+        os.remove(os.path.join(tmp, "route.log"))
+        if "replay" in logged()[0]:
+            fails.append("route log: live prompt marked replay")
+        os.remove(os.path.join(tmp, "route.log"))
+        os.environ["GENIE_REPLAY"] = "1"
+        try:
+            if logged()[0].get("replay") is not True:
+                fails.append("route log: GENIE_REPLAY=1 did not mark the record")
+            os.remove(os.path.join(tmp, "route.log"))
+            os.environ["GENIE_REPLAY"] = "0"
+            if "replay" in logged()[0]:
+                fails.append("route log: GENIE_REPLAY=0 still marked the record")
+        finally:
+            os.environ.pop("GENIE_REPLAY", None)
+
         # GENIE_LOG=0 opts out and creates nothing
         os.remove(os.path.join(tmp, "route.log"))
         os.environ["HOME"] = tmp

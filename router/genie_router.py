@@ -201,16 +201,25 @@ def _append_line(path, line):
 def log_route(text, intent, score, via, conf):
     """Append one redacted JSONL record. Every error is swallowed: the hook's
     job is to route, and a permission error in $HOME is not the user's problem
-    to solve mid-prompt."""
+    to solve mid-prompt.
+
+    `GENIE_REPLAY=1` marks the record `"replay": true`. Replaying the log
+    through the router to measure a change is the obvious way to test one, and
+    it writes every input back as a fresh route: a few hundred of those bury
+    the real traffic, and afterwards nothing tells them apart except a guess at
+    write density. Set it when feeding the router anything but a live prompt.
+    `GENIE_LOG=0` still drops the record entirely."""
     try:
         path = log_path()
         if not path:
             return
         clean = SECRET_RUN.sub("[REDACTED]", (text or "")[:200])
-        _append_line(path, json.dumps(
-            {"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-             "intent": intent, "score": round(float(score), 2),
-             "via": via, "conf": conf, "text": clean}, ensure_ascii=False))
+        rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+               "intent": intent, "score": round(float(score), 2),
+               "via": via, "conf": conf, "text": clean}
+        if os.environ.get("GENIE_REPLAY") not in (None, "", "0"):
+            rec["replay"] = True
+        _append_line(path, json.dumps(rec, ensure_ascii=False))
     except Exception:
         pass
 

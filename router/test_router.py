@@ -321,6 +321,28 @@ def test_abstain_is_silent(fails):
         fails.append("abstain: a regex hit stopped routing: %r" % ctx)
 
 
+def test_low_conf_gives_no_order(fails):
+    """conf=low keeps the tag as a hint but drops the DO line: an order built on
+    a guess makes the host model run skills the user never asked for."""
+    saved = (r.classify, r.confidence)
+    try:
+        r.classify = lambda text: ("fix_request", 0.56, "embed")
+        r.confidence = lambda intent, score, why: "low"
+        ctx = r.hook(json.dumps({"prompt": "這段期間的數據來看判斷不好嗎"}), "claude")
+        if "genie: intent=fix_request conf=low" not in ctx:
+            fails.append("low conf: lost the intent tag: %r" % ctx)
+        if "DO:" in ctx:
+            fails.append("low conf: still emitted a DO line: %r" % ctx)
+        if "[genie prefs]" not in ctx:
+            fails.append("low conf: dropped the prefs line: %r" % ctx)
+        r.confidence = lambda intent, score, why: "high"
+        ctx = r.hook(json.dumps({"prompt": "這段期間的數據來看判斷不好嗎"}), "claude")
+        if "DO:" not in ctx:
+            fails.append("high conf: lost the DO line: %r" % ctx)
+    finally:
+        r.classify, r.confidence = saved
+
+
 def test_machine_turns_are_not_classified(fails):
     """UserPromptSubmit also carries turns nobody typed. Those get no injection
     at all: a label on a background-task report dispatches skills for work the
@@ -360,6 +382,7 @@ def main():
     test_dispatch(fails)
     test_local_tools_follow_level(fails)
     test_abstain_is_silent(fails)
+    test_low_conf_gives_no_order(fails)
     test_machine_turns_are_not_classified(fails)
     test_bad_envelope_is_not_a_prompt(fails)
     run_cases(CASES, fails, "boundary")

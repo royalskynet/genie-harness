@@ -381,19 +381,23 @@ def hook(raw, host="codex"):
     # hold every turn. The intent tag is a judgment, so it is only stated when
     # the router has one.
     abstain = intent == UNSURE
+    degraded = why.startswith("fallback:")
+    # A DO line is an order. Only give one when the router is sure; at
+    # conf=low the tag stays as a hint and the host model judges the rest.
+    # degraded keeps its DO: it says the router is broken, not a guess.
+    order = not abstain and (conf == "high" or degraded)
     lines = [] if abstain else ["genie: intent=%s conf=%s" % (intent, conf)]
     try:
         sys.path.insert(0, HERE)
         import prefs
         res = prefs.resolve(text)
-        if not abstain:
-            lines.append(dispatch("degraded" if why.startswith("fallback:") else intent,
-                                  res, host))
+        if order:
+            lines.append(dispatch("degraded" if degraded else intent, res, host))
         lines.append(prefs.render_context(res, host))
     except Exception as e:  # prefs broken: still route
         sys.stderr.write("genie-router: prefs unavailable (%s)\n" % e)
-        if not abstain:
-            lines.append(dispatch(intent, {}, host))
+        if order:
+            lines.append(dispatch("degraded" if degraded else intent, {}, host))
     return "\n".join(lines)
 
 

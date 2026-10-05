@@ -401,6 +401,56 @@ def test_overlap_asks_once_and_hands_off(fails):
         eq(list(res["ask_owner"]), ["research"], "stored owner is not asked again", fails)
 
 
+def test_coexist_is_told_not_arbitrated(fails):
+    """route/done stack without fighting: say it once, never ask who owns it.
+
+    The failure this pins: treating them like guard/research/style would have the
+    assistant offer to switch one off, and for `done` the user may have no other
+    safety net -- so a tidier config costs them the only check they had.
+    """
+    found = {"route": ["jev-route"], "done": ["jev-gate-mcp"]}
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "prefs.json")
+        res = prefs.resolve("hi", path=path, found=found)
+        eq(sorted(res["coexist"]), ["done", "route"], "both coexist overlaps told", fails)
+        eq(res["ask_owner"], {}, "coexist caps are never arbitrated", fails)
+        ctx = prefs.render_context(res)
+        eq("COEXIST:" in ctx and "jev-route" in ctx, True, "COEXIST line injected", fails)
+        eq("OVERLAP:" in ctx, False, "no OVERLAP line for a coexist cap", fails)
+        eq("nothing to turn off" in ctx, True, "coexist says there is nothing to switch off", fails)
+        eq("set owner" in ctx, False, "coexist offers no owner marker", fails)
+        res = prefs.resolve("hi", path=path, found=found)
+        eq(res["coexist"], {}, "told only once", fails)
+        res = prefs.resolve("hi", path=path, found=dict(found, route=["jev-route", "other-router"]))
+        eq(list(res["coexist"]), ["route"], "a newly installed tool is told again", fails)
+        # Handing a coexist cap away is meaningless, so it must not change any block.
+        before = prefs.resolve("hi", path=path, found=found)["blocks"]
+        after = prefs.resolve("!owner route=jev-route hi", path=path, found=found)["blocks"]
+        eq(after, before, "a coexist owner marker changes no block", fails)
+
+
+def test_every_capability_is_detectable(fails):
+    """Each standing Genie capability must be scannable, or an overlap goes unseen.
+
+    Genie runs five jobs; three live in skills, two only exist as hooks. If a cap
+    has no signature, no event binding and no message, nothing will ever report it.
+    """
+    for cap in overlap.CAPS:
+        eq(cap in overlap.SIGNATURES, True, "cap %s has a signature" % cap, fails)
+        eq(cap in overlap._EVENTS, True, "cap %s declares its events" % cap, fails)
+        has_msg = cap in overlap.RECOMMEND or cap in overlap.COEXIST
+        eq(has_msg, True, "cap %s has something to say when found" % cap, fails)
+        # Exactly one of the two paths: arbitrate (RECOMMEND) or notify (COEXIST).
+        eq((cap in overlap.NOTIFY), (cap in overlap.COEXIST),
+           "cap %s: NOTIFY and COEXIST agree" % cap, fails)
+        eq((cap in overlap.NOTIFY), (cap not in overlap.RECOMMEND),
+           "cap %s: arbitrated xor told" % cap, fails)
+    # A hook-only job must not be matched by a skill or plugin name: a skill cannot
+    # block a command, inject into every turn, or run at Stop.
+    for cap in ("guard", "route", "done"):
+        eq(overlap._EVENTS[cap] is not None, True, "%s is hook-only" % cap, fails)
+
+
 def test_overlap_scan_ignores_genie(fails):
     with tempfile.TemporaryDirectory() as td:
         sk = os.path.join(td, "skills")

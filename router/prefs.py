@@ -375,13 +375,17 @@ def resolve(prompt=None, data=None, persist=True, path=None, found=None, dups=No
     for cap, who in owners.items():
         notes.append("owner of %s -> %s (marker)" % (cap, who))
 
-    # Jobs another installed tool also does, that the user has not been asked about.
+    # Jobs another installed tool also does, that the user has not heard about yet.
+    # ask: one of them has to own it. tell: they stack fine, so it is news, not a question.
     seen = set(data.get("seen", []))
-    ask = {c: n for c, n in found.items()
-           if c not in owners and c not in (data.get("owners") or {}) and any("%s:%s" % (c, x) not in seen for x in n)}
+    fresh = {c: n for c, n in found.items() if any("%s:%s" % (c, x) not in seen for x in n)}
+    ask = {c: n for c, n in fresh.items()
+           if c not in overlap.NOTIFY
+           and c not in owners and c not in (data.get("owners") or {})}
+    tell = {c: n for c, n in fresh.items() if c in overlap.NOTIFY}
     new_dups = [(k, m) for k, m in dups if k not in seen]
 
-    if (durable or lvl or owners or ask or new_dups or first_run) and persist:
+    if (durable or lvl or owners or ask or tell or new_dups or first_run) and persist:
         merged = _blank(data)
         merged["blocks"].update(durable)
         if lvl:
@@ -420,6 +424,7 @@ def resolve(prompt=None, data=None, persist=True, path=None, found=None, dups=No
         "blocks": states,
         "first_run": first_run,
         "ask_owner": ask,
+        "coexist": tell,
         "duplicates": [m for _, m in new_dups],
         "handed_off": {c: o for c, o in handed.items() if o},
         "lang": data.get("lang"),
@@ -466,6 +471,12 @@ def render_context(res, host="codex"):
             "config, not Genie's)." % (other, cap, overlap.CAPS[cap],
                                        overlap.RECOMMEND[cap].format(other=other),
                                        CLI, cap, names[0], other))
+    for cap, names in sorted(res.get("coexist", {}).items()):
+        other = "/".join(names)
+        lines.append(
+            "COEXIST: %s also does `%s` (%s). Nothing to decide and nothing to turn off: "
+            "%s. Tell the user once, in one line, so a second nudge is not a surprise."
+            % (other, cap, overlap.CAPS[cap], overlap.COEXIST[cap].format(other=other)))
     for msg in res.get("duplicates", []):
         lines.append("DUPLICATE: " + msg + ". Raise it once, alongside anything else you ask.")
     # One line, states only: this runs on every prompt, so the dial has to be

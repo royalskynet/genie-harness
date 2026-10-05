@@ -429,23 +429,23 @@ def test_coexist_is_told_not_arbitrated(fails):
         eq(after, before, "a coexist owner marker changes no block", fails)
 
 
-def test_overlap_folds_in_before_handing_over(fails):
-    """A fight is worth ending, not muting: fold the other tool in, then drop it.
+def test_overlap_asks_only_who_owns_it(fails):
+    """One small question -- who owns it -- and never a merge chore.
 
-    The failure this pins: handing the job over leaves both tools installed with
-    one of them silent, and the next person who installs only Genie gains nothing.
-    Genie must also never be the one told to step aside -- most users have no
-    second tool, so a Genie that stands down leaves them with no check at all.
+    The failure this pins: asking a non-developer to diff two rule sets, fold the
+    difference in and delete a tool they do not understand. Picking an owner is
+    reversible and takes one word; merging is a checkout workflow and belongs
+    upstream. Genie must also never be the one told to step aside -- most users
+    have no second tool, so a Genie that stands down leaves them no check at all.
     """
     found = {"guard": ["some-guard"], "style": ["some-style"]}
     with tempfile.TemporaryDirectory() as td:
         path = os.path.join(td, "prefs.json")
         ctx = prefs.render_context(prefs.resolve("hi", path=path, found=found))
         eq("OVERLAP:" in ctx, True, "OVERLAP still raised", fails)
-        eq("move into Genie" in ctx, True, "folding in is offered first", fails)
-        eq("Removing their tool is their call" in ctx, True, "removal needs a yes", fails)
-        eq(ctx.index("move into Genie") < ctx.index("who should own it"), True,
-           "folding in comes before arbitration", fails)
+        eq("who should own it" in ctx, True, "the owner question is asked", fails)
+        for chore in ("move into Genie", "fold the difference", "Removing their tool"):
+            eq(chore in ctx, False, "no merge chore is handed to the user (%s)" % chore, fails)
     for cap in sorted(set(overlap.CAPS) - set(overlap.NOTIFY)):
         advice = overlap.RECOMMEND[cap]
         eq(advice.startswith("suggest {other}"), False,

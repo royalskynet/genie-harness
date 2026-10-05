@@ -1,8 +1,10 @@
 {
   "name": "genie-harness",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Makes Claude Code work for people who don't code: reads what you mean, picks the right Genie skill for you, looks for existing tools before building, and blocks catastrophic commands.",
-  "author": { "name": "royalskynet" },
+  "author": {
+    "name": "royalskynet"
+  },
   "repository": "https://github.com/royalskynet/genie-harness",
   "license": "MIT",
   "hooks": "./claude/hooks.json"

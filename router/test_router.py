@@ -19,10 +19,17 @@ import json
 import os
 import re
 import sys
+import tempfile
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+# Point prefs at a throwaway file before anything imports it. The hook cases below
+# go through the real write path, so without this a test run edits the developer's
+# own ~/.genie/prefs.json -- and since an overlap is only announced once, running
+# the tests would silently eat the OVERLAP/COEXIST line they had not seen yet.
+os.environ.setdefault("GENIE_PREFS", os.path.join(tempfile.mkdtemp(prefix="genie-test-"),
+                                                  "prefs.json"))
 import genie_router as r  # noqa: E402
 
 CASES = [

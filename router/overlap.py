@@ -29,10 +29,14 @@ import shutil
 GENIE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # job -> what it means, in one line (shown to the user when asking)
+# One entry per standing Genie capability, so an overlap anywhere gets surfaced:
+# guard = PreToolUse, route = UserPromptSubmit, done = Stop, research/style = skills.
 CAPS = {
     "guard": "block catastrophic commands (rm -rf ~, force push to main, drop table)",
     "research": "look for an existing tool before building ($wheel)",
     "style": "tone and depth of replies (level, glossary, analogies)",
+    "route": "read each message and tell the assistant what this turn needs",
+    "done": "ask for real output before a task is called finished",
 }
 
 SIGNATURES = {
@@ -43,7 +47,15 @@ SIGNATURES = {
     # ponytail-review/audit/debt/help are one-shot reports, not a tone or depth mode.
     "style": re.compile(r"caveman|terse|output[-_]?style|ponytail(?![-_]?(review|audit|debt|help))|"
                         r"\basd\b|asd[-_]style", re.I),
+    "route": re.compile(r"\w*rout\w*|\bintent\b|classif|triage|preclassif", re.I),
+    "done": re.compile(r"\w*gate\w*|done[-_]?check|complet|\bclaim\b|stop[-_]?hook", re.I),
 }
+
+# Two kinds of overlap. ARBITRATE: both tools act on the same turn and fight, so
+# one has to own it. NOTIFY: they stack without fighting (a second opinion costs
+# a little noise, not a wrong outcome), so say it once and leave both running --
+# turning one off would cost the user a layer they may be the only one to have.
+NOTIFY = ("route", "done")
 
 # Advice given when asking. Genie's guard is a beginner floor, so a dedicated
 # tool is the better owner; for research and style Genie's version is wired
@@ -57,8 +69,18 @@ RECOMMEND = {
              "(terse styles fight beginner explanations)",
 }
 
-# Only a PreToolUse hook can actually block a command.
-_EVENTS = {"guard": ("PreToolUse",), "research": None, "style": None}
+# What to say for a NOTIFY overlap: no question, no owner, nothing to turn off.
+COEXIST = {
+    "route": "Genie names what the turn needs, {other} may point at a tool or a level. "
+             "Follow both; they answer different questions",
+    "done": "both ask for evidence before finishing. Genie's is mechanical (files changed, "
+            "nothing run); {other} may judge the wording. Keep both",
+}
+
+# Which hook event can actually do the job: only PreToolUse blocks a command,
+# only UserPromptSubmit sees the message before the reply, only Stop sees the end.
+_EVENTS = {"guard": ("PreToolUse",), "research": None, "style": None,
+           "route": ("UserPromptSubmit",), "done": ("Stop",)}
 
 
 def codex_home():
@@ -133,12 +155,14 @@ def scan(home=None, dirs=None):
             if n.lower() == "wheel":  # a copy of Genie's own skill: duplicates() reports it
                 continue
             for cap, rx in SIGNATURES.items():
-                if cap != "guard" and rx.search(n):  # a skill cannot block a command
+                # A skill cannot block a command, inject into every turn, or run at Stop:
+                # those jobs need a hook, so only a hook counts as another owner of them.
+                if _EVENTS[cap] is None and rx.search(n):
                     found[cap].add(n.lower())
     for n in plugins:
         if not n.startswith("genie"):
             for cap, rx in SIGNATURES.items():
-                if cap != "guard" and rx.search(n):
+                if _EVENTS[cap] is None and rx.search(n):
                     found[cap].add(n.lower())
     return {c: sorted(v) for c, v in found.items() if v}
 

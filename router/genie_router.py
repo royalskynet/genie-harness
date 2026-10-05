@@ -11,11 +11,14 @@ Two tiers, cheapest first:
      (~0.1 s, CPU only, dep: numpy; model = pruned potion-multilingual-128M,
       greedy longest-match tokenizer, int8 rows -> ~35 MB disk, ~60 MB RAM)
 
-Below-threshold emits `intent=unsure` instead of asserting the default. A
-cosine classifier that guesses confidently is worse than one that abstains:
-the guess silently steers the model, while `unsure` hands the decision back to
-the model's own judgement (the three-tier waterfall pattern: heuristics ->
-embedding -> defer).
+Below threshold the router stays silent: no `intent=` tag and no `DO:` line,
+only the turn's prefs. An earlier version emitted `intent=unsure` with a DO
+line telling the model to ask which of two readings was meant. 282 logged
+routes say that was the wrong trade: 55% of real user turns land below the
+threshold, and on those the host model already understands the message better
+than a 128M cosine classifier does. A label it cannot stand behind overrides
+that understanding -- the model asked a clarifying question instead of just
+answering. Abstaining means abstaining: heuristics -> embedding -> say nothing.
 
 Then it dispatches. The label alone made the model look up what to do in a
 table; a beginner never types `$wheel`, so the hook says it outright: one `DO:`
@@ -254,9 +257,8 @@ DO = {
                          "camera). Once the goal is clear, run {wheel} before proposing how.",
     "continue": "they are answering your last message (a yes or a pick). Carry on with that "
                 "plan; do not ask again.",
-    UNSURE: "you cannot tell what they want. Never answer only that you cannot. Offer your "
-            "best 2 readings as one short question ('Do you mean A or B? I can ...'); do not "
-            "guess.",
+    # No entry for UNSURE on purpose: hook() returns prefs only and never calls
+    # dispatch() for it. See the module docstring.
     # model missing (e.g. still downloading): the label is a placeholder, so
     # hand the judgment back instead of dispatching "just do it".
     "degraded": "the intent router could not classify this message (model unavailable). "
@@ -303,6 +305,19 @@ DO_NO_WHEEL = {
 FIXINDEX_FIRST = (" Before anything else run `fixindex find \"<exact error>\"` (their fix log); "
                   "follow a matching entry. After the fix, record it with `fixindex fi`.")
 
+# UserPromptSubmit is a shared pipe: the host also sends turns nobody typed --
+# a finished background task, the stdout of a slash command, a pasted block.
+# 23 of 282 logged routes were those, and 14 came back `fix_request`, because a
+# task report quotes the error it already handled. A label on a machine turn is
+# worse than no label: it dispatches skills for work the user never asked for.
+# So drop the turn here rather than tighten the classifier -- when a classifier
+# misfires, first check its input is the thing it should be classifying.
+NOT_USER_TURN = re.compile(
+    r"\s*(?:<\s*(?:task-notification|local-command-stdout|local-command-stderr|"
+    r"command-message|command-name|command-args|system-reminder|pasted_content|"
+    r"function_results|user-prompt-submit-hook)\b"
+    r"|\[(?:Artifact comment sent to Claude|Request interrupted)\b)", re.I)
+
 
 def dispatch(intent, res, host="codex"):
     """-> the `DO:` line. `res` is prefs.resolve(); research off or handed to
@@ -332,7 +347,9 @@ def dispatch(intent, res, host="codex"):
 
 
 def hook(raw, host="codex"):
-    """UserPromptSubmit: one injection = tag + DO + prefs. Fails open per part."""
+    """UserPromptSubmit: tag + DO + prefs, or prefs alone when the router
+    abstains, or nothing at all when the turn is not the user talking.
+    Fails open per part."""
     try:
         data = json.loads(raw)
         text = data.get("prompt") or data.get("user_prompt") or data.get("message") or ""
@@ -340,21 +357,30 @@ def hook(raw, host="codex"):
         text = raw
     if not isinstance(text, str) or not text.strip():
         return ""
+    if NOT_USER_TURN.match(text):
+        return ""
     intent, score, why = classify(text)
     conf = confidence(intent, score, why)
     if os.environ.get("GENIE_DEBUG"):
         sys.stderr.write("genie: %s score=%.2f conf=%s via=%s\n" % (intent, score, conf, why))
     log_route(text, intent, score, why, conf)
-    lines = ["genie: intent=%s conf=%s" % (intent, conf)]
+    # Abstaining: prefs are knowledge (language, the 4 stop cases, clarity) and
+    # hold every turn. The intent tag is a judgment, so it is only stated when
+    # the router has one.
+    abstain = intent == UNSURE
+    lines = [] if abstain else ["genie: intent=%s conf=%s" % (intent, conf)]
     try:
         sys.path.insert(0, HERE)
         import prefs
         res = prefs.resolve(text)
-        lines.append(dispatch("degraded" if why.startswith("fallback:") else intent, res, host))
+        if not abstain:
+            lines.append(dispatch("degraded" if why.startswith("fallback:") else intent,
+                                  res, host))
         lines.append(prefs.render_context(res, host))
     except Exception as e:  # prefs broken: still route
         sys.stderr.write("genie-router: prefs unavailable (%s)\n" % e)
-        lines.append(dispatch(intent, {}, host))
+        if not abstain:
+            lines.append(dispatch(intent, {}, host))
     return "\n".join(lines)
 
 

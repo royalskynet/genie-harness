@@ -166,7 +166,7 @@ def test_local_tools_follow_level(fails):
                              % (intent, lvl, lvl, out))
     # not an intent where "just run what is here" is the right instruction
     for intent in ("teach_me", "user_confused", "risky_action", "ambiguous_request",
-                   "continue", r.UNSURE):
+                   "continue"):
         out = r.dispatch(intent, dict(on, level="expert"), "codex")
         if phrase in out:
             fails.append("dispatch %s/expert: local-tools steer where it does not belong: %r"
@@ -275,10 +275,52 @@ def test_route_log(fails):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_abstain_is_silent(fails):
+    """Below threshold: prefs only, no `intent=` tag and no `DO:` line. The
+    classifier's own abstention must not be dressed up as a judgment."""
+    saved = r.INTENTS["threshold"]
+    try:
+        r.INTENTS["threshold"] = 2.0  # nothing can clear this -> always abstain
+        ctx = r.hook(json.dumps({"prompt": "這個東西大概要怎麼辦才好"}), "claude")
+        if "intent=" in ctx:
+            fails.append("abstain: still emitted an intent tag: %r" % ctx)
+        if "DO:" in ctx:
+            fails.append("abstain: still emitted a DO line: %r" % ctx)
+        if "[genie prefs]" not in ctx:
+            fails.append("abstain: dropped the prefs line too: %r" % ctx)
+    finally:
+        r.INTENTS["threshold"] = saved
+    # a regex hit still routes, so abstaining did not break the normal path
+    ctx = r.hook(json.dumps({"prompt": "幫我把專案跑起來"}), "claude")
+    if "intent=execute_request" not in ctx or "DO:" not in ctx:
+        fails.append("abstain: a regex hit stopped routing: %r" % ctx)
+
+
+def test_machine_turns_are_not_classified(fails):
+    """UserPromptSubmit also carries turns nobody typed. Those get no injection
+    at all: a label on a background-task report dispatches skills for work the
+    user never asked for."""
+    machine = (
+        "<task-notification>\n<task-id>abc</task-id>\nfixed the bug\n</task-notification>",
+        "<local-command-stdout>error: command failed</local-command-stdout>",
+        "<system-reminder>something broke</system-reminder>",
+        "[Artifact comment sent to Claude] please fix this",
+    )
+    for text in machine:
+        if r.hook(json.dumps({"prompt": text}), "claude") != "":
+            fails.append("machine turn was classified: %r" % text[:40])
+    # and a real message that merely mentions one still routes
+    ctx = r.hook(json.dumps({"prompt": "幫我看看 task-notification 是什麼"}), "claude")
+    if "intent=" not in ctx:
+        fails.append("machine-turn filter swallowed a real question: %r" % ctx)
+
+
 def main():
     fails = []
     test_dispatch(fails)
     test_local_tools_follow_level(fails)
+    test_abstain_is_silent(fails)
+    test_machine_turns_are_not_classified(fails)
     run_cases(CASES, fails, "boundary")
     run_eval_set(fails)
     test_missing_model_warns(fails)

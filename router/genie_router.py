@@ -144,6 +144,15 @@ def classify(text):
         return UNSURE, 0.0, "empty"
     name, why = regex_tier(text)
     if name:
+        # A keyword in a long message is usually incidental ("...commit 是什麼
+        # 是否有必要" is not a teach_me). Past the cap the hit is a guess: tag
+        # it, score it below high_threshold so it gets no DO line. risky_action
+        # stays sure at any length -- the stop case must not soften.
+        # ponytail: char count, so English gets the same cap as CJK; measure
+        # per-script from route.log if English long-hits show up.
+        prose = SECRET_RUN.sub("", text)  # a pasted key or path is not wording
+        if len(prose) > INTENTS.get("regex_sure_len", 40) and name != "risky_action":
+            return name, 0.5, "regex-long:" + why[len("regex:"):]
         return name, 1.0, why
     try:
         name, score = embedding_tier(text)
@@ -158,7 +167,7 @@ def classify(text):
 
 
 def confidence(intent, score, why):
-    """regex hit = certain; embedding needs to clear high_threshold."""
+    """short regex hit = certain; the rest needs to clear high_threshold."""
     if why.startswith("regex:"):
         return "high"
     if intent == UNSURE or why.startswith(("fallback:", "empty")):

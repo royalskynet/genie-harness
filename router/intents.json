@@ -3,6 +3,7 @@
   "_order_note": "順序有意義（先命中先贏）：(0) continue 只吃整句是「好／第二個」這種短回覆，放最前面，否則「好」會被當成新任務 (1) teach_me 先攔「這是什麼」(2) risky_action 攔明示破壞動作 (3) fix_request 攔「本來能跑現在壞掉／在報錯」，放在 research_needed 前面，否則「壞掉了，哪個工具比較好」會被送去比較工具 (4) research（比較／選型）先於 build_request（要一個東西），兩者都會先跑 wheel (5) execute → ambiguous → clear。ambiguous 的 regex 錨定整句，只吃「幫我做個網站」這種沒有目標的請求；一旦講出要做什麼，就是 build_request。",
   "threshold": 0.35,
   "high_threshold": 0.55,
+  "regex_sure_len": 40,
   "default": "clear_request",
   "intents": {
     "continue": {
@@ -38,7 +39,6 @@
         "從哪開始",
         "怎麼開始",
         "新手上路",
-        "小白",
         "what is",
         "what are",
         "how do i use",

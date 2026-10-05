@@ -352,9 +352,13 @@ def hook(raw, host="codex"):
     Fails open per part."""
     try:
         data = json.loads(raw)
-        text = data.get("prompt") or data.get("user_prompt") or data.get("message") or ""
     except Exception:
-        text = raw
+        # stdin on this path is always the host's hook JSON. Treating an
+        # unparseable payload as the prompt classifies the envelope itself.
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    text = data.get("prompt") or data.get("user_prompt") or data.get("message") or ""
     if not isinstance(text, str) or not text.strip():
         return ""
     if NOT_USER_TURN.match(text):

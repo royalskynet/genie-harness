@@ -57,20 +57,10 @@ SIGNATURES = {
 # turning one off would cost the user a layer they may be the only one to have.
 NOTIFY = ("route", "done")
 
-# Said before any owner question, for every ARBITRATE cap. Handing the job to
-# the other tool settles this machine and nothing else: both stay installed, one
-# just goes quiet, and the next person who installs Genie alone is no better off.
-# Folding what the other tool knows into Genie travels -- and only then does
-# deleting it actually make the setup smaller.
-ABSORB = ("first look at what {other} does that Genie does not, and say whether it can "
-          "move into Genie itself (rules, patterns and wording can; a tool's own code "
-          "cannot). If it can: offer to fold the difference in and then remove {other} "
-          "-- that reaches everyone who installs Genie, and is the only path that leaves "
-          "one tool instead of two. Removing their tool is their call: list the exact "
-          "changes and wait. Only if it cannot move, or they want to keep {other}, "
-          "fall back to deciding who speaks here")
-
-# Fallback advice once absorbing is ruled out, i.e. who should go quiet here.
+# Who should go quiet here. Picking an owner is small and reversible, so that is
+# all a user is ever asked for; folding another tool's rules into Genie is a
+# checkout workflow (read both sets, keep the difference, ship the skill) and
+# belongs upstream, not in an injected instruction.
 RECOMMEND = {
     "guard": "suggest Genie keeps the floor and {other} keeps whatever it covers beyond "
              "it; if only one may speak, prefer the one with more rules, and say which "

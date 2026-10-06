@@ -456,8 +456,22 @@ ONBOARDING = (
     "on plain words run `%s set level <l>`. Then answer their message." % CLI)
 
 
-def render_context(res, host="codex"):
-    """The short block injected as UserPromptSubmit additionalContext."""
+def render_context(res, host="codex", part="all"):
+    """The prefs block. part="all": everything, every turn (Codex: no SessionStart).
+    part="static": level/register/blocks/ALWAYS, sent once by Claude's SessionStart
+    (re-runs after /compact and /clear). part="turn": only what this message
+    changed or raised; the static block rides along only when the state moved.
+    UserPromptSubmit context stays in the transcript, so a static block sent every
+    turn piles up one copy per message."""
+    if part == "turn":
+        news = []
+        if res.get("first_run"):
+            news.append(ONBOARDING)
+        news += _notices(res)
+        if res["changes"] or res["turn_overrides"]:
+            return render_context(res, host, "static") + ("\n" + "\n".join(news) if news else "") \
+                + "\nchanged this message: " + ("; ".join(res["changes"]) or "turn-only override")
+        return "\n".join(news)
     handed = res.get("handed_off", {})
     lines = ["[genie prefs] level=%s" % res["level"]]
     # Not droppable when terms and examples are off: at the upper levels the register
@@ -465,13 +479,29 @@ def render_context(res, host="codex"):
     # is pitched, not just the two blocks that spell a term out.
     if not handed.get("style"):
         lines.append("register: " + REGISTER.get(res["level"], REGISTER["beginner"]))
+    if part == "all":
+        if res.get("first_run"):
+            lines.append(ONBOARDING)
+        if res["changes"]:
+            lines.append("changed this message: " + "; ".join(res["changes"]))
+        lines += _notices(res)
+    lines.append(_dial(res, handed))
+    always = list(ALWAYS)
+    if res.get("lang"):
+        always[0] = "always answer in %s, whatever they write in" % res["lang"]
+    lines.append("not preference-tunable, always on: " + "; ".join(always))
+    # No line about the command gate or the host's permission prompts: both are
+    # enforced outside the model, so telling it every turn changed nothing it did.
+    return "\n".join(lines)
+
+
+def _notices(res):
+    """One-time lines: optional companions, overlaps, duplicates."""
+    lines = []
     if res.get("first_run"):
-        lines.append(ONBOARDING)
         for name, why, how in res.get("missing", []):
             lines.append("OPTIONAL, not installed: %s (%s). Mention it once, in one line, "
                          "with how to add it: %s. Do not install it yourself." % (name, why, how))
-    if res["changes"]:
-        lines.append("changed this message: " + "; ".join(res["changes"]))
     for cap, names in sorted(res.get("ask_owner", {}).items()):
         other = "/".join(names)
         lines.append(
@@ -490,6 +520,10 @@ def render_context(res, host="codex"):
             % (other, cap, overlap.CAPS[cap], overlap.COEXIST[cap].format(other=other)))
     for msg in res.get("duplicates", []):
         lines.append("DUPLICATE: " + msg + ". Raise it once, alongside anything else you ask.")
+    return lines
+
+
+def _dial(res, handed):
     # One line, states only: this runs on every prompt, so the dial has to be
     # scannable at a glance rather than six paragraphs long. Marks ride along
     # after the value so a change never changes state silently.
@@ -513,14 +547,7 @@ def render_context(res, host="codex"):
            for mark, meaning in (("*", "you set"), ("~", "this turn only"),
                                  ("^", "handled by " + "/".join(legend)))
            if any(d.endswith(mark) for d in dial)]
-    lines.append("blocks: " + " ".join(dial) + ("  (%s)" % "; ".join(key) if key else ""))
-    always = list(ALWAYS)
-    if res.get("lang"):
-        always[0] = "always answer in %s, whatever they write in" % res["lang"]
-    lines.append("not preference-tunable, always on: " + "; ".join(always))
-    # No line about the command gate or the host's permission prompts: both are
-    # enforced outside the model, so telling it every turn changed nothing it did.
-    return "\n".join(lines)
+    return "blocks: " + " ".join(dial) + ("  (%s)" % "; ".join(key) if key else "")
 
 
 USAGE = """genie prefs
@@ -552,6 +579,9 @@ def main(argv):
         return 0
     if args[0] == "path":
         print(p)
+        return 0
+    if args[0] == "context":  # Claude SessionStart: the static block, once per session
+        print(render_context(resolve(None, persist=False), "claude", "static"))
         return 0
     if args[0] == "reset":
         save(_blank({}), p)

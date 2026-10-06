@@ -87,7 +87,16 @@ grep -iF -e "<關鍵字1>" -e "<關鍵字2>" ~/.wheel/registry.tsv 2>/dev/null |
 2. 最平衡：…　3. 最自由：…（最多 3 個，沒問的比較維度不列）
 ```
 
-收尾登記一行（讓下次第 0 步找得到）：
+收尾登記一行（讓下次第 0 步找得到）。`review_by` 依領域變化速度定，不一律半年：
+
+| 領域 | 例子 | 天數 |
+|---|---|---|
+| 快 | AI／LLM／agent 工具、模型與路由、記憶層、免費模型池 | 30 |
+| 中 | 一般開源套件、CLI、雲端服務 | 90 |
+| 慢 | OS 原生機制（launchd、檔案系統）、成熟框架、純流程決定 | 180 |
+
+一張卡橫跨多個領域時取最快的那級。
+
 ```bash
-mkdir -p ~/.wheel && printf '%s\t%s\t%s\t%s\t%s\n' "$(date +%F)" "<裁決>" "<問題一句>" "<首選>" "$(date -v+180d +%F 2>/dev/null || date -d +180days +%F)" >> ~/.wheel/registry.tsv
+D=<30|90|180>; mkdir -p ~/.wheel && printf '%s\t%s\t%s\t%s\t%s\n' "$(date +%F)" "<裁決>" "<問題一句>" "<首選>" "$(date -v+${D}d +%F 2>/dev/null || date -d +${D}days +%F)" >> ~/.wheel/registry.tsv
 ```

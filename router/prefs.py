@@ -94,24 +94,28 @@ BLOCKS = tuple(LEVEL_DEFAULTS["beginner"].keys())
 
 # Hard-wired knowledge for the model, not a preference. Deliberately not tunable:
 # how a turn reads depends on what was asked, not on how much the user likes verbosity.
+# Every line here is paid on every single turn, so each one is written at the
+# shortest wording that still survives a literal reading. Adding a clause costs
+# ~4 characters per word forever; say it in genie-humanizer instead unless the
+# model has to have it in front of it while answering.
 ALWAYS = (
     "answer in the user's language (Traditional Chinese: Taiwan terms, 軟體/程式/網路)",
-    "decide and proceed: recommend one option and do it; stop to ask only for the 4 "
-    "stop cases (cannot be undone, seen by others, costs money or system settings, "
-    "changes someone else's rules) or when a wrong guess means redoing the whole result; "
-    "batch every question into one message",
+    # The 4 stop cases stay spelled out. Shortening them to "irreversible, costly"
+    # reads as a narrower list and talks the model out of stopping before a publish.
+    "decide and proceed: pick one option and do it; ask only when it cannot be undone, "
+    "is seen by others, costs money or system settings, changes someone else's rules, "
+    "or a wrong guess wastes the whole job; batch all questions into one message",
     "say plainly when you do not know",
     # ASD-STE100-style clarity, at every level and under any style tool: a misread
     # is a wrong action. Detail lives in genie-humanizer.
     "one reading per sentence: short, one action each, one name per thing, active "
     "voice, no vague words",
-    # Rhetorical slop: clear sentences that still carry no information. Detail and
-    # the Chinese examples live in genie-humanizer; this line is the per-turn hook.
-    "no rhetorical slop: no colon reveals, no 'not X but Y', no importance puffery, "
-    "no meta-commentary telling them what to notice, no profound closing line, no "
-    "unsourced 'experts say'; cut any sentence that would still be true for another "
-    "product",
-    "assume they cannot type commands or skill names: run skills and commands yourself",
+    # Rhetorical slop: clear sentences carrying no information, including the
+    # defensive counterpoint added to look even-handed. Detail in genie-humanizer.
+    "no slop: no colon reveals, no 'not X but Y', no puffery, no meta-commentary, no "
+    "profound last line, no unsourced claims; cut any sentence true of any product; "
+    "when the evidence favours one side, say so without a token counterpoint",
+    "they cannot type commands: run skills and commands yourself",
 )
 
 # The host's own permission layer, named in the injected context.
@@ -458,6 +462,9 @@ def render_context(res, host="codex"):
     """The short block injected as UserPromptSubmit additionalContext."""
     handed = res.get("handed_off", {})
     lines = ["[genie prefs] level=%s" % res["level"]]
+    # Not droppable when terms and examples are off: at the upper levels the register
+    # is the instruction NOT to reach for an analogy, and it sets how every sentence
+    # is pitched, not just the two blocks that spell a term out.
     if not handed.get("style"):
         lines.append("register: " + REGISTER.get(res["level"], REGISTER["beginner"]))
     if res.get("first_run"):
@@ -488,19 +495,30 @@ def render_context(res, host="codex"):
     # One line, states only: this runs on every prompt, so the dial has to be
     # scannable at a glance rather than six paragraphs long. Marks ride along
     # after the value so a change never changes state silently.
-    dial = []
+    # Marks are single characters with one legend at the end: spelling out
+    # "(you set this)" beside four pinned blocks cost 56 characters of every prompt.
+    dial, legend = [], []
     for name in BLOCKS:
         owned = next((o for c, o in handed.items()
                       if (c == "research" and name == "research")
                       or (c == "style" and name in STYLE_BLOCKS)), "")
-        mark = " (this turn only)" if name in res["turn_overrides"] else (
-            " (handled by %s)" % owned if owned else (
-                " (you set this)" if name in res["pinned"] else ""))
+        if name in res["turn_overrides"]:
+            mark = "~"
+        elif owned:
+            mark = "^"
+            if owned not in legend:
+                legend.append(owned)
+        else:
+            mark = "*" if name in res["pinned"] else ""
         dial.append("%s=%s%s" % (name, res["blocks"][name], mark))
-    lines.append("blocks: " + " ".join(dial))
+    key = ["%s %s" % (mark, meaning)
+           for mark, meaning in (("*", "you set"), ("~", "this turn only"),
+                                 ("^", "handled by " + "/".join(legend)))
+           if any(d.endswith(mark) for d in dial)]
+    lines.append("blocks: " + " ".join(dial) + ("  (%s)" % "; ".join(key) if key else ""))
     always = list(ALWAYS)
     if res.get("lang"):
-        always[0] = "always answer in %s, even when they write in another language" % res["lang"]
+        always[0] = "always answer in %s, whatever they write in" % res["lang"]
     lines.append("not preference-tunable, always on: " + "; ".join(always))
     if handed.get("guard"):
         lines.append("catastrophic-command gate: handed to %s by the user; Genie's guard "

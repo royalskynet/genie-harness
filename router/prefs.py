@@ -105,6 +105,12 @@ ALWAYS = (
     # is a wrong action. Detail lives in genie-humanizer.
     "one reading per sentence: short, one action each, one name per thing, active "
     "voice, no vague words",
+    # Rhetorical slop: clear sentences that still carry no information. Detail and
+    # the Chinese examples live in genie-humanizer; this line is the per-turn hook.
+    "no rhetorical slop: no colon reveals, no 'not X but Y', no importance puffery, "
+    "no meta-commentary telling them what to notice, no profound closing line, no "
+    "unsourced 'experts say'; cut any sentence that would still be true for another "
+    "product",
     "assume they cannot type commands or skill names: run skills and commands yourself",
 )
 

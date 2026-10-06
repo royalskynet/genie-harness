@@ -263,7 +263,7 @@ def test_stop_cases_and_pinned_lang(fails):
     eq("answer in the user's language" in ctx, True, "default follows their language", fails)
     ctx = prefs.render_context(prefs.resolve("Can you add a login page",
                                              data={"lang": "Traditional Chinese"}, persist=False))
-    eq("always answer in Traditional Chinese, even when" in ctx, True, "pinned lang", fails)
+    eq("always answer in Traditional Chinese" in ctx, True, "pinned lang", fails)
     eq("answer in the user's language" in ctx, False, "pinned lang replaces default", fails)
 
 

@@ -293,9 +293,7 @@ LOCAL_TOOL_LEVELS = ("advanced", "expert")
 # someone senior should be told: what can I run right now, here. Beginner and
 # intermediate users get it as noise -- they cannot read `--help`, and a list of
 # tools to try is another thing to fail at.
-LOCAL_TOOLS = (" Prefer what is already on this machine: installed skills (your skill "
-               "list), CLIs (check `which` and `--help` first), and scripts in this "
-               "repo; run them yourself.")
+LOCAL_TOOLS = " Prefer what is already on this machine (skills, CLIs via `--help`, repo scripts)."
 # The user turned research off: same flow, no prior-art search.
 DO_NO_WHEEL = {
     "build_request": "the user wants something that does a job (research is off, so no "

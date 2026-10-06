@@ -212,9 +212,11 @@ def test_resolve_never_raises(fails):
 
 
 def test_context_mentions_the_boundary(fails):
-    """The injected context must state the non-negotiable part out loud."""
+    """The injected context must state the non-negotiable part out loud. Only the
+    rules the model itself carries out count: the command gate and the host's
+    permission prompts are enforced outside it, so they are not restated."""
     text = prefs.render_context(prefs.resolve("hello", persist=False, data=prefs._blank({})))
-    for needed in ("level=", "terms", "research", "no preference can turn them off"):
+    for needed in ("level=", "terms", "research", "not preference-tunable"):
         if needed not in text:
             fails.append("injected context missing %r" % needed)
     if len(text.splitlines()) > 12:

@@ -118,8 +118,6 @@ ALWAYS = (
     "they cannot type commands: run skills and commands yourself",
 )
 
-# The host's own permission layer, named in the injected context.
-HOST_GUARD = {"codex": "Codex sandbox/approval", "claude": "Claude Code permission prompts"}
 
 # --- parsers ---------------------------------------------------------------
 
@@ -520,13 +518,8 @@ def render_context(res, host="codex"):
     if res.get("lang"):
         always[0] = "always answer in %s, whatever they write in" % res["lang"]
     lines.append("not preference-tunable, always on: " + "; ".join(always))
-    if handed.get("guard"):
-        lines.append("catastrophic-command gate: handed to %s by the user; Genie's guard "
-                     "stands down while %s is installed. %s still apply."
-                     % (handed["guard"], handed["guard"], HOST_GUARD.get(host, HOST_GUARD["codex"])))
-    else:
-        lines.append("NOT blocks, and no preference can turn them off: the "
-                     "catastrophic-command gate, and %s." % HOST_GUARD.get(host, HOST_GUARD["codex"]))
+    # No line about the command gate or the host's permission prompts: both are
+    # enforced outside the model, so telling it every turn changed nothing it did.
     return "\n".join(lines)
 
 

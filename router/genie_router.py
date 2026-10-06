@@ -400,7 +400,10 @@ def hook(raw, host="codex"):
         res = prefs.resolve(text)
         if order:
             lines.append(dispatch("degraded" if degraded else intent, res, host))
-        lines.append(prefs.render_context(res, host))
+        # Claude gets the static prefs once from SessionStart; Codex has no such hook.
+        ctx = prefs.render_context(res, host, "turn" if host == "claude" else "all")
+        if ctx:
+            lines.append(ctx)
     except Exception as e:  # prefs broken: still route
         sys.stderr.write("genie-router: prefs unavailable (%s)\n" % e)
         if order:

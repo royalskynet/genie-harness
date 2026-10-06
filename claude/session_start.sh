@@ -13,6 +13,10 @@ if ! python3 -c "" 2>/dev/null; then
   echo "Tell the user in one sentence, and offer to run: xcode-select --install (macOS) or install python3."
   exit 0
 fi
+# Static prefs once per session (and again after /compact or /clear): a
+# UserPromptSubmit copy every turn stays in the transcript and piles up.
+echo
+python3 "$ROOT/router/prefs.py" context 2>/dev/null
 
 MODEL="$HOME/.genie/model"
 [ -f "$ROOT/router/model/vocab.json" ] || [ -f "$MODEL/vocab.json" ] && exit 0

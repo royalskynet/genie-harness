@@ -306,7 +306,7 @@ def test_abstain_is_silent(fails):
     saved = r.INTENTS["threshold"]
     try:
         r.INTENTS["threshold"] = 2.0  # nothing can clear this -> always abstain
-        ctx = r.hook(json.dumps({"prompt": "這個東西大概要怎麼辦才好"}), "claude")
+        ctx = r.hook(json.dumps({"prompt": "這個東西大概要怎麼辦才好"}), "codex")
         if "intent=" in ctx:
             fails.append("abstain: still emitted an intent tag: %r" % ctx)
         if "DO:" in ctx:
@@ -321,6 +321,26 @@ def test_abstain_is_silent(fails):
         fails.append("abstain: a regex hit stopped routing: %r" % ctx)
 
 
+def test_claude_static_once(fails):
+    """Claude: the static prefs block comes from SessionStart, not every turn.
+    UserPromptSubmit context stays in the transcript, so a per-turn copy piles up
+    one ~300-token block per message. It comes back on a turn that moved state."""
+    import prefs
+    data = {"level": "advanced", "blocks": {"terms": "off"}}
+    plain = prefs.resolve("幫我改一下標題", data=data, persist=False)
+    if prefs.render_context(plain, "claude", "turn"):
+        fails.append("claude turn: static prefs sent on a plain turn")
+    static = prefs.render_context(plain, "claude", "static")
+    for need in ("[genie prefs] level=advanced", "register:", "blocks:", "always on:"):
+        if need not in static:
+            fails.append("claude static: missing %r" % need)
+    moved = prefs.resolve("just code 寫個函式", data=data, persist=False)
+    if "blocks:" not in prefs.render_context(moved, "claude", "turn"):
+        fails.append("claude turn: a turn override did not resend the dial")
+    if "always on:" not in prefs.render_context(plain, "codex"):
+        fails.append("codex: lost the per-turn static block (it has no SessionStart)")
+
+
 def test_low_conf_gives_no_order(fails):
     """conf=low keeps the tag as a hint but drops the DO line: an order built on
     a guess makes the host model run skills the user never asked for."""
@@ -328,7 +348,7 @@ def test_low_conf_gives_no_order(fails):
     try:
         r.classify = lambda text: ("fix_request", 0.56, "embed")
         r.confidence = lambda intent, score, why: "low"
-        ctx = r.hook(json.dumps({"prompt": "這段期間的數據來看判斷不好嗎"}), "claude")
+        ctx = r.hook(json.dumps({"prompt": "這段期間的數據來看判斷不好嗎"}), "codex")
         if "genie: intent=fix_request conf=low" not in ctx:
             fails.append("low conf: lost the intent tag: %r" % ctx)
         if "DO:" in ctx:
@@ -409,6 +429,7 @@ def main():
     test_local_tools_follow_level(fails)
     test_abstain_is_silent(fails)
     test_low_conf_gives_no_order(fails)
+    test_claude_static_once(fails)
     test_long_regex_hit_is_a_guess(fails)
     test_machine_turns_are_not_classified(fails)
     test_bad_envelope_is_not_a_prompt(fails)

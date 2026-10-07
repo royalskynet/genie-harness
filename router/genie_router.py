@@ -49,6 +49,14 @@ UNSURE = "unsure"
 
 def regex_tier(text):
     low = text.lower()
+    # Asking for other people's solutions is research at any length; only a
+    # stop case outranks it.
+    for kw in INTENTS["intents"]["risky_action"].get("keywords", []):
+        if re.search(kw, low):
+            return "risky_action", "regex:" + kw
+    for kw in INTENTS.get("wheel_sure", []):
+        if re.search(kw, low):
+            return "research_needed", "regex-wheel:" + kw
     # ponytail: first matching intent wins, order in intents.json = priority
     for name, spec in INTENTS["intents"].items():
         for kw in spec.get("keywords", []):
@@ -151,7 +159,8 @@ def classify(text):
         # ponytail: char count, so English gets the same cap as CJK; measure
         # per-script from route.log if English long-hits show up.
         prose = SECRET_RUN.sub("", text)  # a pasted key or path is not wording
-        if len(prose) > INTENTS.get("regex_sure_len", 40) and name != "risky_action":
+        if len(prose) > INTENTS.get("regex_sure_len", 40) and name != "risky_action" \
+                and not why.startswith("regex-wheel:"):
             return name, 0.5, "regex-long:" + why[len("regex:"):]
         return name, 1.0, why
     try:
@@ -168,9 +177,15 @@ def classify(text):
 
 def confidence(intent, score, why):
     """short regex hit = certain; the rest needs to clear high_threshold."""
-    if why.startswith("regex:"):
+    if why.startswith(("regex:", "regex-wheel:")):
         return "high"
     if intent == UNSURE or why.startswith(("fallback:", "empty")):
+        return "low"
+    # "Broken" is a fact about the world, not a tone: embeddings put praise,
+    # medical questions and design asks here (10-04..07 log: 48 embedding-only
+    # fix_request at conf=high; the sampled ones were none of them broken
+    # things). Keywords only.
+    if intent in INTENTS.get("embed_never_high", ()):
         return "low"
     return "high" if score >= INTENTS.get("high_threshold", 0.55) else "low"
 
@@ -352,6 +367,13 @@ def dispatch(intent, res, host="codex"):
         do = DO_NO_WHEEL.get(intent, do)
     else:
         wheel = ref % "wheel"
+    # A DO line that names a block the user switched off is an order the model
+    # has to disobey; it learns to skip DO lines. Name only what is on.
+    if intent == "teach_me":
+        if blocks.get("terms") == "off":
+            do = do.replace(" ({genie-terms} for the one key term)", "")
+        if blocks.get("examples") == "off":
+            do = do.replace("use {genie-explain}", "answer directly, no examples or analogies")
     names = ("genie-execute", "genie-explain", "genie-terms")
     line = "DO: " + do.format(wheel=wheel, **{n: ref % n for n in names})
     # The user's own fix log knows this machine's past breakages; ask it before the web.

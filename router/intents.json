@@ -4,6 +4,36 @@
   "threshold": 0.35,
   "high_threshold": 0.55,
   "regex_sure_len": 40,
+  "_wheel_sure_note": "wheel_sure：明講要找別人的做法（社群經驗、開源專案、輪子、現成、更好的方案）。這些字在長訊息裡也不是順帶一提，所以不受 regex_sure_len 限制，且只輸給 risky_action。來源是實際對話中使用者必須自己補打 /wheel 的句子：router 原本 43 句只抓到 1 句。",
+  "wheel_sure": [
+    "社群.{0,4}(經驗|反饋|回饋|共識|建議|做法|怎麼)",
+    "(其他|別)人.{0,6}(反饋|回饋|經驗|做法|怎麼做)",
+    "開源.{0,4}(專案|工具|做法|方案|實作|資源)",
+    "輪子(?!卡|指令|skill)",
+    "現成",
+    "靈感",
+    "成熟(方案|做法|專案)",
+    "最(夯|熱門|主流)",
+    "官方文[檔件]",
+    "調研",
+    "(更|最)(好|整合|高效|省|快|迅速|完善)的?(做法|方法|辦法|方案|解法)",
+    "(有無|有沒有)更",
+    "(怎麼|如何|是否有)省",
+    "類似.{0,30}的?(方案|能力|工具|專案|服務)",
+    "(有沒有|有無)(相關|類似|哪些)",
+    "怎麼建議",
+    "可以的?抄",
+    "prior.?art",
+    "open.?source (project|tool|alternative)",
+    "how do (others|other people|people usually)",
+    "community (consensus|advice|experience)",
+    "existing (solution|tool|library)s?",
+    "最高\\s*stars?",
+    "選(一個|哪個).{0,12}(函式庫|套件|library|工具|框架)"
+  ],
+  "embed_never_high": [
+    "fix_request"
+  ],
   "default": "clear_request",
   "intents": {
     "continue": {
@@ -219,7 +249,10 @@
         "造輪子",
         "reinvent",
         "is there an? (existing |ready.?made )?(library|tool|package)",
-        "best way to"
+        "best way to",
+        "還需要.{0,20}嗎",
+        "能(一併|用來|拿來).{0,20}嗎",
+        "負擔.{0,4}(比較)?(小|大)"
       ],
       "examples": [
         "做網站要用 react 還是 vue，幫我比較一下哪個比較適合新手",

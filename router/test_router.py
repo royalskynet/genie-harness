@@ -408,6 +408,49 @@ def test_machine_turns_are_not_classified(fails):
         fails.append("machine-turn filter swallowed a real question: %r" % ctx)
 
 
+def test_wheel_asks_are_sure(fails):
+    """10-04..07: the user typed /wheel by hand 18 times; the router had sent 1
+    of 43 such sentences to research_needed/high. Asking for other people's
+    solutions is the whole signal, so it holds at any length and beats every
+    label except risky_action. Talking *about* the wheel tool is not an ask."""
+    asks = ("有沒有哪些開源專案是盡量讓模型調用免llm工具來取代llm行為，以此減少token消耗的？",
+            "記憶庫中文搜尋的問題看看社群反饋，跟trigram一起比較",
+            "參考有沒有相關輪子或設計靈感",
+            "有無更整合或更高效做法",
+            "沒有現成的訓練成果可以的抄嗎不管語言")
+    for t in asks:
+        intent, s_, why = r.classify(t)
+        if intent != "research_needed" or r.confidence(intent, s_, why) != "high":
+            fails.append("wheel ask not sure research: %s %s %r" % (intent, why, t[:30]))
+    for t in ("輪子卡有期限？", "那個輪子指令是可以正常運作的對嗎"):
+        if r.classify(t)[2].startswith("regex-wheel:"):
+            fails.append("talk about wheel routed as a wheel ask: %r" % t)
+    intent = r.classify("社群有沒有現成的做法，不然就 rm -rf 整個目錄重來")[0]
+    if intent != "risky_action":
+        fails.append("wheel ask outranked risky_action: %s" % intent)
+
+
+def test_embedding_fix_is_a_guess(fails):
+    """Embedding-only fix_request was high 48 times in the 10-04..07 log, on
+    praise, a medical question, design asks. Broken needs a keyword."""
+    if r.confidence("fix_request", 0.9, "embedding") != "low":
+        fails.append("embedding fix_request still conf=high")
+    intent, s_, why = r.classify("跑不起來")
+    if intent != "fix_request" or r.confidence(intent, s_, why) != "high":
+        fails.append("keyword fix_request lost conf=high: %s %s" % (intent, why))
+
+
+def test_do_follows_blocks(fails):
+    """A DO that names a block the user turned off is an order the model must
+    disobey; once it learns that, it skips DO lines. teach_me names only what is on."""
+    on = r.dispatch("teach_me", {"blocks": {}}, "claude")
+    if "genie-terms" not in on or "genie-explain" not in on:
+        fails.append("teach_me default lost its skills: %r" % on)
+    off = r.dispatch("teach_me", {"blocks": {"terms": "off", "examples": "off"}}, "claude")
+    if "genie-terms" in off or "genie-explain" in off or "checking they understood" not in off:
+        fails.append("teach_me ignored blocks off: %r" % off)
+
+
 def test_bad_envelope_is_not_a_prompt(fails):
     """stdin on the hook path is always the host's JSON. An unparseable payload
     used to fall through as the prompt, so the envelope got classified by
@@ -433,6 +476,9 @@ def main():
     test_long_regex_hit_is_a_guess(fails)
     test_machine_turns_are_not_classified(fails)
     test_bad_envelope_is_not_a_prompt(fails)
+    test_wheel_asks_are_sure(fails)
+    test_embedding_fix_is_a_guess(fails)
+    test_do_follows_blocks(fails)
     run_cases(CASES, fails, "boundary")
     run_eval_set(fails)
     test_missing_model_warns(fails)

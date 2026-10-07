@@ -1,6 +1,6 @@
 {
   "name": "genie-harness",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Makes Claude Code work for people who don't code: reads what you mean, picks the right Genie skill for you, looks for existing tools before building, and blocks catastrophic commands.",
   "author": {
     "name": "royalskynet"

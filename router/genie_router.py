@@ -33,6 +33,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 import unicodedata
@@ -45,6 +46,13 @@ MODEL_DIR = os.environ.get("GENIE_MODEL_DIR") or next(
      if os.path.isfile(os.path.join(d, "vocab.json"))), os.path.join(HERE, "model"))
 INTENTS = json.load(open(os.path.join(HERE, "intents.json"), encoding="utf-8"))
 UNSURE = "unsure"
+
+# Route extension imports
+try:
+    sys.path.insert(0, HERE)
+    import route_ext as rx
+except Exception:
+    rx = None
 
 
 def regex_tier(text):
@@ -222,7 +230,7 @@ def _append_line(path, line):
         fh.write(line + "\n")
 
 
-def log_route(text, intent, score, via, conf):
+def log_route(text, intent, score, via, conf, ext=None):
     """Append one redacted JSONL record. Every error is swallowed: the hook's
     job is to route, and a permission error in $HOME is not the user's problem
     to solve mid-prompt.
@@ -232,7 +240,8 @@ def log_route(text, intent, score, via, conf):
     it writes every input back as a fresh route: a few hundred of those bury
     the real traffic, and afterwards nothing tells them apart except a guess at
     write density. Set it when feeding the router anything but a live prompt.
-    `GENIE_LOG=0` still drops the record entirely."""
+    `GENIE_LOG=0` still drops the record entirely.
+    `ext` is written only when the route extension ran (non-None)."""
     try:
         path = log_path()
         if not path:
@@ -241,6 +250,8 @@ def log_route(text, intent, score, via, conf):
         rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                "intent": intent, "score": round(float(score), 2),
                "via": via, "conf": conf, "text": clean}
+        if ext is not None:
+            rec["ext"] = ext
         if os.environ.get("GENIE_REPLAY") not in (None, "", "0"):
             rec["replay"] = True
         _append_line(path, json.dumps(rec, ensure_ascii=False))
@@ -384,6 +395,78 @@ def dispatch(intent, res, host="codex"):
     return line
 
 
+def _run_ext(cmd, payload, timeout):
+    """Run a configured extension command; stdout on rc=0, else "". Never raises."""
+    try:
+        p = subprocess.run(cmd, input=json.dumps(payload, ensure_ascii=False),
+                           capture_output=True, text=True, timeout=timeout)
+        return p.stdout.strip() if p.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def route_ext(data, text, host, intent, conf):
+    """User routing table + tier + optional escalate/turn commands, all
+    configured in route_ext.json (see route_ext.load_config). Returns (lines, ext_log); ([], None)
+    when no config. Shadow mode logs the decision but injects nothing and
+    skips turn_cmd, so the L1 gate stays with whoever owns it today."""
+    cfg = rx.load_config(host)
+    if cfg is None or not rx.eligible(text):
+        return [], None
+    table = os.path.expanduser(cfg.get("table") or "")
+    md = open(table, encoding="utf-8").read() if table and os.path.isfile(table) else ""
+    routes = rx.parse_routes(md, cfg.get("heading") or "任務路由表")
+    hit, _m, strong = rx.match(routes, text)
+    shadow = bool(cfg.get("shadow"))
+    route, tier, ask, esc, phase = hit, None, False, None, None
+    # Strong local hit is decided for free; everything else (weak hit or no
+    # hit at all) is the grey band the escalate command exists for.
+    if not strong and cfg.get("escalate_cmd"):
+        cmd = list(cfg["escalate_cmd"]) + (["--dry"] if shadow else [])
+        out = _run_ext(cmd, {"prompt": text, "transcript_path": data.get("transcript_path", ""),
+                             "cwd": data.get("cwd") or os.getcwd(), "session_id": data.get("session_id", ""),
+                             "routes": [{"when": r["when"], "action": r["action"]} for r in routes]}, 4)
+        try:
+            res = json.loads(out.splitlines()[-1]) if out else {}
+        except ValueError:
+            res = {}
+        esc = res.get("status") or "fail"
+        if esc == "ok":
+            tier = res.get("tier") if res.get("tier") in ("L0", "L1", "L2") else None
+            idx = res.get("route")
+            # The judge saw the prompt and abstained: that is a verdict, so
+            # the weak hit is dropped rather than patched back in.
+            route = routes[idx - 1] if isinstance(idx, int) and 1 <= idx <= len(routes) else None
+            ask = bool(res.get("ask_first"))
+            phase = res.get("phase")
+    if tier is None and conf == "high":
+        tier = {"risky_action": "L2", "fix_request": "L1"}.get(intent)
+    fix = tier == "L1" or phase == "debugging" or (route is not None and rx.is_fix_row(route))
+    lines = []
+    if not shadow:
+        parts = []
+        if route:
+            parts.append("路由：%s → %s" % (route["when"], route["action"]))
+        if tier:
+            parts.append("級別 %s" % tier)
+        if parts:
+            line = "[genie route] " + "｜".join(parts)
+            if tier == "L2" and not (route and "wheel" in route["action"]):
+                line += "｜動手前先跑 `/wheel` 找最好解法"
+            if ask:
+                line += "｜有歧義且錯了要重來：先查檔確認，查不到再問使用者"
+            lines.append(line + "。照此路由直接執行，不再自行重判；與鐵則衝突以鐵則為準。")
+        # Every live eligible turn: turn_cmd clears the previous L1 gate even
+        # when this turn opens none.
+        if cfg.get("turn_cmd"):
+            out = _run_ext(list(cfg["turn_cmd"]), {"prompt": text, "session_id": data.get("session_id", ""), "fix": fix}, 3)
+            if out:
+                lines.append(out)
+    ext = {"len": len(text.strip()), "hit_kw": hit["kw"] if hit else None, "strong": bool(hit and strong),
+           "esc": esc, "tier": tier, "route_when": route["when"] if route else None, "fix": fix, "shadow": shadow}
+    return lines, ext
+
+
 def hook(raw, host="codex"):
     """UserPromptSubmit: tag + DO + prefs, or prefs alone when the router
     abstains, or nothing at all when the turn is not the user talking.
@@ -405,7 +488,6 @@ def hook(raw, host="codex"):
     conf = confidence(intent, score, why)
     if os.environ.get("GENIE_DEBUG"):
         sys.stderr.write("genie: %s score=%.2f conf=%s via=%s\n" % (intent, score, conf, why))
-    log_route(text, intent, score, why, conf)
     # Abstaining: prefs are knowledge (language, the 4 stop cases, clarity) and
     # hold every turn. The intent tag is a judgment, so it is only stated when
     # the router has one.
@@ -416,6 +498,15 @@ def hook(raw, host="codex"):
     # degraded keeps its DO: it says the router is broken, not a guess.
     order = not abstain and (conf == "high" or degraded)
     lines = [] if abstain else ["genie: intent=%s conf=%s" % (intent, conf)]
+
+    ext_log = None
+    if rx is not None:
+        try:
+            ext_lines, ext_log = route_ext(data, text, host, intent, conf)
+            lines.extend(ext_lines)
+        except Exception as e:  # extension broken: plain genie output
+            sys.stderr.write("genie-router: route_ext failed (%s)\n" % e)
+
     try:
         sys.path.insert(0, HERE)
         import prefs
@@ -430,6 +521,8 @@ def hook(raw, host="codex"):
         sys.stderr.write("genie-router: prefs unavailable (%s)\n" % e)
         if order:
             lines.append(dispatch("degraded" if degraded else intent, {}, host))
+
+    log_route(text, intent, score, why, conf, ext_log)
     return "\n".join(lines)
 
 

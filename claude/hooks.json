@@ -10,7 +10,7 @@
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/genie_router.py\" --host claude", "timeout": 5 }
+          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/genie_router.py\" --host claude", "timeout": 10 }
         ]
       }
     ],

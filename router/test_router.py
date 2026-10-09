@@ -466,6 +466,206 @@ def test_bad_envelope_is_not_a_prompt(fails):
         fails.append("envelope check swallowed a real prompt")
 
 
+def test_secret_detection(fails):
+    """SECRET: line injected for high-confidence secret shapes; not for lookalikes.
+    Log must not contain the secret value."""
+    import io, contextlib, tempfile, os, json as _json
+
+    # 6 secret shapes that should trigger
+    secret_cases = [
+        "sk-ant-TESTTESTTESTTESTTESTTEST",  # 20+ after sk-ant-
+        "sk-TESTTESTTESTTESTTESTTESTTEST",  # 20+ after sk-
+        "ghp_TESTTESTTESTTESTTESTTESTTESTTT",  # 30+ after ghp_ (30 chars)
+        "github_pat_TESTTESTTESTTESTTESTTESTTESTTT",  # 30+ after github_pat_ (30 chars)
+        "AK" + "IA" + "ABCDEFGHIJKLMNOP",  # 16 chars after AKIA
+        "xo" + "xb-" + "TESTTESTTESTTEST",  # 10+ after xoxb-
+        "AI" + "zaTESTTESTTESTTESTTESTTESTTESTTESTTEST",  # 35 after AIza
+        "-----BEGIN " + "RSA " + "PRIVATE KEY-----" + "\n"
+        + "TESTTESTTESTTESTTESTTESTTESTTESTTESTTEST",
+    ]
+
+    for secret in secret_cases:
+        prompt = "幫我設定這個 key " + secret + " 謝謝"
+        ctx = r.hook(_json.dumps({"prompt": prompt, "session_id": "t"}), "claude")
+        if "SECRET:" not in ctx:
+            fails.append("secret detection: missed %r -> %r" % (secret[:20], ctx[:120]))
+        if secret in ctx:
+            fails.append("secret detection: leaked secret into output: %r" % ctx[:120])
+
+    # 3 non-matching patterns that should NOT trigger
+    non_secret_cases = [
+        "3f2a9c1d4e5b6a7f8091a2b3c4d5e6f708192a3b",  # 40-char git commit hash
+        "550e8400-e29b-41d4-a716-446655440000",  # UUID
+        "a/very/long/relative/path/to/some/project/file.py",  # long relative path
+        "risk-assessment-for-the-quarterly-report",  # "sk-" inside a word
+        "desk-booking-system-for-the-new-office",  # "sk-" inside a word
+    ]
+
+    for non_secret in non_secret_cases:
+        prompt = "commit " + non_secret + " 是哪個"
+        ctx = r.hook(_json.dumps({"prompt": prompt, "session_id": "t"}), "claude")
+        if "SECRET:" in ctx:
+            fails.append("secret detection: false positive on %r -> %r" % (non_secret[:20], ctx[:120]))
+
+    # Log must not contain secret value
+    tmp = tempfile.mkdtemp()
+    log_path = os.path.join(tmp, "route.log")
+    os.environ["GENIE_LOG"] = log_path
+    try:
+        secret = "sk-ant-TESTTESTTESTTESTTESTTEST"
+        prompt = "幫我設定這個 key " + secret + " 謝謝"
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            r.hook(_json.dumps({"prompt": prompt, "session_id": "t"}), "claude")
+        if os.path.exists(log_path):
+            with open(log_path, encoding="utf-8") as fh:
+                log_content = fh.read()
+            if secret in log_content:
+                fails.append("secret detection: secret leaked into log: %r" % log_content[:200])
+    finally:
+        os.environ.pop("GENIE_LOG", None)
+        import shutil
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # Even when router abstains (no intent, no DO), SECRET: line still appears
+    saved = r.INTENTS["threshold"]
+    try:
+        r.INTENTS["threshold"] = 2.0  # force abstain
+        secret = "sk-ant-TESTTESTTESTTESTTESTTEST"
+        prompt = "幫我設定這個 key " + secret + " 謝謝"
+        ctx = r.hook(_json.dumps({"prompt": prompt, "session_id": "t"}), "claude")
+        if "SECRET:" not in ctx:
+            fails.append("secret detection: missing SECRET on abstain: %r" % ctx)
+        if "intent=" in ctx:
+            fails.append("secret detection: abstain leaked intent: %r" % ctx)
+        if "DO:" in ctx:
+            fails.append("secret detection: abstain leaked DO: %r" % ctx)
+    finally:
+        r.INTENTS["threshold"] = saved
+
+
+def test_long_session_reminder(fails):
+    """Long session reminder: triggers after threshold minutes, throttles, respects
+    GENIE_LONG_SESSION_MIN=0, handles missing transcript_path gracefully."""
+    import json as _json
+    import tempfile
+    import os
+    import time
+    from datetime import datetime, timezone, timedelta
+
+    def _run_with_state(data, state_dir):
+        """Run hook with GENIE_STATE_DIR set to state_dir."""
+        old_state = os.environ.get("GENIE_STATE_DIR")
+        os.environ["GENIE_STATE_DIR"] = state_dir
+        try:
+            return r.hook(_json.dumps(data), "claude")
+        finally:
+            if old_state is None:
+                os.environ.pop("GENIE_STATE_DIR", None)
+            else:
+                os.environ["GENIE_STATE_DIR"] = old_state
+
+    # Test 1: 151 minutes ago -> has LONG SESSION
+    with tempfile.TemporaryDirectory() as d:
+        t_path = os.path.join(d, "t.jsonl")
+        ts = (datetime.now(timezone.utc) - timedelta(minutes=200)).isoformat().replace("+00:00", "Z")
+        with open(t_path, "w", encoding="utf-8") as f:
+            f.write(_json.dumps({"type": "user", "timestamp": ts}) + "\n")
+        data = {"prompt": "繼續做下一步吧謝謝你", "session_id": "s9", "transcript_path": t_path}
+        ctx = _run_with_state(data, d)
+        if "LONG SESSION" not in ctx:
+            fails.append("long session: 151+ min should trigger reminder: %r" % ctx[:200])
+        if "this conversation has run 200 minutes" not in ctx:
+            fails.append("long session: should show elapsed minutes: %r" % ctx[:200])
+
+    # Test 2: Second call immediately -> no reminder (throttled)
+    with tempfile.TemporaryDirectory() as d:
+        t_path = os.path.join(d, "t.jsonl")
+        ts = (datetime.now(timezone.utc) - timedelta(minutes=200)).isoformat().replace("+00:00", "Z")
+        with open(t_path, "w", encoding="utf-8") as f:
+            f.write(_json.dumps({"type": "user", "timestamp": ts}) + "\n")
+        data = {"prompt": "繼續做下一步吧謝謝你", "session_id": "s9", "transcript_path": t_path}
+        ctx1 = _run_with_state(data, d)
+        ctx2 = _run_with_state(data, d)
+        if "LONG SESSION" in ctx2:
+            fails.append("long session: second call should be throttled: %r" % ctx2[:200])
+
+    # Test 3: 10 minutes ago -> no reminder (under threshold)
+    with tempfile.TemporaryDirectory() as d:
+        t_path = os.path.join(d, "t.jsonl")
+        ts = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+        with open(t_path, "w", encoding="utf-8") as f:
+            f.write(_json.dumps({"type": "user", "timestamp": ts}) + "\n")
+        data = {"prompt": "繼續做下一步吧謝謝你", "session_id": "s10", "transcript_path": t_path}
+        ctx = _run_with_state(data, d)
+        if "LONG SESSION" in ctx:
+            fails.append("long session: 10 min should not trigger: %r" % ctx[:200])
+
+    # Test 4: No transcript_path -> no reminder
+    with tempfile.TemporaryDirectory() as d:
+        data = {"prompt": "繼續做下一步吧謝謝你", "session_id": "s11"}
+        ctx = _run_with_state(data, d)
+        if "LONG SESSION" in ctx:
+            fails.append("long session: no transcript_path should not trigger: %r" % ctx[:200])
+
+    # Test 5: GENIE_LONG_SESSION_MIN=0 -> no reminder
+    old_env = os.environ.get("GENIE_LONG_SESSION_MIN")
+    try:
+        os.environ["GENIE_LONG_SESSION_MIN"] = "0"
+        with tempfile.TemporaryDirectory() as d:
+            t_path = os.path.join(d, "t.jsonl")
+            ts = (datetime.now(timezone.utc) - timedelta(minutes=200)).isoformat().replace("+00:00", "Z")
+            with open(t_path, "w", encoding="utf-8") as f:
+                f.write(_json.dumps({"type": "user", "timestamp": ts}) + "\n")
+            data = {"prompt": "繼續做下一步吧謝謝你", "session_id": "s12", "transcript_path": t_path}
+            ctx = _run_with_state(data, d)
+            if "LONG SESSION" in ctx:
+                fails.append("long session: GENIE_LONG_SESSION_MIN=0 should disable: %r" % ctx[:200])
+    finally:
+        if old_env is None:
+            os.environ.pop("GENIE_LONG_SESSION_MIN", None)
+        else:
+            os.environ["GENIE_LONG_SESSION_MIN"] = old_env
+
+    # Test 6: Transcript without timestamp -> no reminder
+    with tempfile.TemporaryDirectory() as d:
+        t_path = os.path.join(d, "t.jsonl")
+        with open(t_path, "w", encoding="utf-8") as f:
+            f.write(_json.dumps({"type": "user", "message": "hello"}) + "\n")
+        data = {"prompt": "繼續做下一步吧謝謝你", "session_id": "s13", "transcript_path": t_path}
+        ctx = _run_with_state(data, d)
+        if "LONG SESSION" in ctx:
+            fails.append("long session: no timestamp in transcript should not trigger: %r" % ctx[:200])
+
+    # Test 7: Invalid timestamp format -> no reminder
+    with tempfile.TemporaryDirectory() as d:
+        t_path = os.path.join(d, "t.jsonl")
+        with open(t_path, "w", encoding="utf-8") as f:
+            f.write(_json.dumps({"type": "user", "timestamp": "not-a-timestamp"}) + "\n")
+        data = {"prompt": "繼續做下一步吧謝謝你", "session_id": "s14", "transcript_path": t_path}
+        ctx = _run_with_state(data, d)
+        if "LONG SESSION" in ctx:
+            fails.append("long session: invalid timestamp should not trigger: %r" % ctx[:200])
+
+    # Test 8: Reminder appears even when router abstains (no intent, no DO)
+    with tempfile.TemporaryDirectory() as d:
+        t_path = os.path.join(d, "t.jsonl")
+        ts = (datetime.now(timezone.utc) - timedelta(minutes=200)).isoformat().replace("+00:00", "Z")
+        with open(t_path, "w", encoding="utf-8") as f:
+            f.write(_json.dumps({"type": "user", "timestamp": ts}) + "\n")
+        data = {"prompt": "這個東西大概要怎麼辦才好", "session_id": "s15", "transcript_path": t_path}
+        saved_threshold = r.INTENTS["threshold"]
+        try:
+            r.INTENTS["threshold"] = 2.0  # force abstain
+            ctx = _run_with_state(data, d)
+            if "LONG SESSION" not in ctx:
+                fails.append("long session: should appear even when router abstains: %r" % ctx[:200])
+            if "intent=" in ctx:
+                fails.append("long session: abstain should not leak intent: %r" % ctx[:200])
+        finally:
+            r.INTENTS["threshold"] = saved_threshold
+
+
 def main():
     fails = []
     test_dispatch(fails)
@@ -479,6 +679,8 @@ def main():
     test_wheel_asks_are_sure(fails)
     test_embedding_fix_is_a_guess(fails)
     test_do_follows_blocks(fails)
+    test_secret_detection(fails)
+    test_long_session_reminder(fails)
     run_cases(CASES, fails, "boundary")
     run_eval_set(fails)
     test_missing_model_warns(fails)

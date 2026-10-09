@@ -55,7 +55,7 @@
 - `PREMORTEM.md`：30 條預測失效模式 + 預防設計（5 層）
 - `README.md`：雙語，誠實標示 74 句自寫 dev set
 - `hooks.json`：Codex 範本，UserPromptSubmit（router，含 prefs）+ PreToolUse（guard）
-- `claude/hooks.json`：Claude Code plugin，SessionStart（`session_start.sh`：輸出 AGENTS.md、首次背景下載模型）+ UserPromptSubmit（`--host claude`）+ PreToolUse（guard）
+- `claude/hooks.json`：Claude Code plugin，SessionStart（`session_start.sh`：輸出 AGENTS.md、首次背景下載模型、`selftest.py` 自檢）+ UserPromptSubmit（`--host claude`，含金鑰提醒與長 session 提醒）+ PreToolUse（guard，含 Read）+ PostToolUse／PostToolUseFailure（`fail_streak.py`，Bash 連敗停損；失敗事件只發 PostToolUseFailure，錯誤在 `error` 欄）+ Stop（done_gate）
 - `install.sh`：多 hook 合併 + smoke test（A4/E3）
 
 ### 7. 測試
@@ -84,6 +84,8 @@
 | 檔案 | 用途 |
 |---|---|
 | `router/guard_dangerous.py` | PreToolUse 安全閘 |
+| `router/fail_streak.py` | Bash 同指紋連敗 2 次注入停損提示；狀態 `~/.genie/state/fail-<sid>.json`，7 天清 |
+| `router/selftest.py` | SessionStart 自檢 guard／router／hook 路徑，健康時零輸出 |
 | `router/prefs.py` | 偏好系統核心 |
 | `router/genie_router.py` | 唯一 UserPromptSubmit hook：分類 → DO 派工 → prefs |
 | `.claude-plugin/`、`claude/` | Claude Code plugin |

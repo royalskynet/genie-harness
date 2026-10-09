@@ -84,6 +84,10 @@
 | F9 | AGENTS.md 砍到 100 行時刪掉只寫在這裡的規則 | 中 | 規則消失 | 必留段落 grep 斷言；test_repo 無漂移 | T9 驗收 |
 | F10 | ALWAYS 改成「推薦並照做」後，小白的建置選擇被模型代決 | 中 | 做錯要重來 | 文案保留「產出不可互換就問」；build_request 的 DO 仍等他選 | DO 文案 |
 | F11 | 免費模型執行工單順手改壞別處 | 中 | 回歸 | 每張單步＋全套測試＋保留行為 grep；收件看 diff | 收件驗收 |
+| F12 | 每支 hook 都 fail-open，壞了完全靜默，使用者以為有保護 | 高 | 保護消失沒人知道 | SessionStart 跑 `selftest.py`：餵 `rm -rf ~` 必須 deny、router 必須有輸出、hook 路徑必須存在；健康時零輸出，壞了講一句 | `test_selftest.py` |
+| F13 | 憑證讀出規則誤擋設定指令（`env API_KEY=x node`、`npm config set …_authToken`），使用者開始繞過閘門 | 中 | 同 A3 | 只擋整包印出（`env`／`printenv`／`set` 不帶參數，含當 pipe 開頭）與 `printenv <金鑰名>`；帶參數的 `env`／`set` 放行 | `test_guard.py` must-pass |
+| F14 | 金鑰提醒把一般單字當金鑰（`risk-assessment-…` 含 `sk-`） | 低 | 噪音 | 每個格式前面要求非英數字邊界 | `test_router.py` non-secret |
+| F15 | 免費模型執行工單時把工作區裡**別張工單**的改動當垃圾 `git checkout` 掉，自己的驗收照過（2026-10-09 實際發生，wo-6 清掉 wo-1／wo-2） | 高 | 成果無聲消失 | dc `executor-rules.md` 第 9 條禁止還原別人的改動；收件時對照計畫逐項 grep，不只看 PASS | 收件驗收 |
 
 ---
 

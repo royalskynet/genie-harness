@@ -399,6 +399,17 @@ def main():
                 env={"GENIE_ALLOW_DANGEROUS": "1"})
         if p.stdout.strip():
             fails.append("ESCAPE HATCH BROKEN: %r" % payload)
+    # per-rule whitelist: the named rule stands down, every other rule stays on
+    p = run(json.dumps({"tool_name": "Bash",
+                        "tool_input": {"command": "launchctl load ~/Library/LaunchAgents/x.plist"}}),
+            env={"GENIE_GUARD_ALLOW": "launch-agent-register"})
+    if p.stdout.strip():
+        fails.append("RULE WHITELIST BROKEN: launch-agent-register still fired")
+    for payload, why in MUST_BLOCK[:3]:
+        p = run(json.dumps({"tool_name": "Bash", "tool_input": {"command": payload}}),
+                env={"GENIE_GUARD_ALLOW": "launch-agent-register"})
+        if not p.stdout.strip() or json.loads(p.stdout)["hookSpecificOutput"].get("permissionDecision") != "deny":
+            fails.append("RULE WHITELIST TOO WIDE: %s (%s) no longer denied" % (payload, why))
     # malformed input must fail open, never crash
     for junk in ["", "not json", "{}", '{"tool_input": null}', '{"tool_input": "str"}', "[]"]:
         p = run(junk)

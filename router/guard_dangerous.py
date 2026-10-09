@@ -625,17 +625,33 @@ def _handed_off():
         return False
 
 
+def _allowed_rules():
+    """Rule names this environment has whitelisted via `GENIE_GUARD_ALLOW`.
+
+    Why per-rule and not just `GENIE_ALLOW_DANGEROUS=1`: an unattended bot that
+    legitimately maintains its own launchd jobs needs exactly one rule to stand
+    down, and turning off all 60-odd of them to get it is the worse trade. Comma
+    separated, rule names as they appear in the tables above.
+    """
+    raw = os.environ.get("GENIE_GUARD_ALLOW", "")
+    return {n.strip() for n in raw.split(",") if n.strip()}
+
+
+def _log_bypass(what):
+    # Premortem A7: a bypass that leaves no trace gets discovered months later,
+    # by which point nobody remembers turning it on. Make it loud.
+    try:
+        log = os.path.expanduser("~/.claude/logs/genie-guard-bypass.log")
+        os.makedirs(os.path.dirname(log), exist_ok=True)
+        with open(log, "a") as fh:
+            fh.write("%s\n" % what)
+    except Exception:
+        pass
+
+
 def main():
     if os.environ.get("GENIE_ALLOW_DANGEROUS") == "1":
-        # Premortem A7: a bypass that leaves no trace gets discovered months later,
-        # by which point nobody remembers turning it on. Make it loud.
-        try:
-            log = os.path.expanduser("~/.claude/logs/genie-guard-bypass.log")
-            os.makedirs(os.path.dirname(log), exist_ok=True)
-            with open(log, "a") as fh:
-                fh.write("GENIE_ALLOW_DANGEROUS=1 bypass active\n")
-        except Exception:
-            pass
+        _log_bypass("GENIE_ALLOW_DANGEROUS=1 bypass active")
         return
     if _handed_off():
         return
@@ -667,6 +683,12 @@ def main():
                         hits = inspect_text(target, tool_input[key])
                         if hits:
                             break
+        allowed = _allowed_rules()
+        if allowed:
+            for _, name, _r in hits:
+                if name in allowed:
+                    _log_bypass("GENIE_GUARD_ALLOW bypass: rule %s" % name)
+            hits = [h for h in hits if h[1] not in allowed]
         if not hits:
             return
         severity, name, reason = hits[0]

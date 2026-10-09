@@ -64,6 +64,7 @@ MUST_BLOCK = [
     ("aws s3 rb s3://prod-backups --recursive", "bucket delete"),
     ("kubectl delete namespace production", "cluster delete"),
     ("launchctl load ~/Library/LaunchAgents/x.plist", "persistence"),
+    ("launchctl bootstrap ~/Library/LaunchAgents/x.plist", "persistence, no domain target"),
     ("echo 'x' >> ~/.zshrc", "shell profile"),
     # apply_patch / Write targets
 ]
@@ -187,6 +188,9 @@ MUST_PASS = [
     # bootout aimed at one job, not at a whole domain
     "launchctl bootout gui/501/com.example.job",
     "launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.example.plist",
+    # bootstrap with a full domain target registers one job and bootout undoes it
+    "launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.example.plist",
+    "launchctl bootstrap gui/$(id -u) /Users/x/Library/LaunchAgents/com.example.plist",
     'echo "launchctl bootout gui/501"',           # prose mentioning it
     # the same facts about a secret, without the value
     "cut -d= -f1 .env",

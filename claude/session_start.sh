@@ -18,6 +18,9 @@ fi
 echo
 python3 "$ROOT/router/prefs.py" context 2>/dev/null
 
+# Self-check: verify guard, router, and hooks are functional. Silent on success.
+python3 "$ROOT/router/selftest.py" 2>/dev/null
+
 MODEL="$HOME/.genie/model"
 [ -f "$ROOT/router/model/vocab.json" ] || [ -f "$MODEL/vocab.json" ] && exit 0
 if ! python3 -c "import numpy" 2>/dev/null; then

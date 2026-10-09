@@ -111,9 +111,15 @@ BASH_DENY = [
     ("kubectl-cluster-delete",
      r"\bkubectl\s+delete\b[^|;&]*\b(?:namespace|node|pvc|persistentvolumeclaim|pv|all)\b",
      "This deletes cluster-wide resources and may not be recoverable. 改做：改 `kubectl delete pod <名稱>` 只刪單一資源，或先 `kubectl get ns <名稱> -o yaml > backup.yaml` 備份。"),
+    # `load` is the legacy form: bare path, no domain target, and it silently
+    # loads an entire directory when handed one. `bootstrap gui/<uid> <plist>`
+    # registers exactly one job and `bootout gui/<uid>/<label>` takes it back,
+    # so that form stays allowed -- otherwise the reason text names a remedy
+    # this very rule denies, and the model can never comply (fix: dead-end
+    # advice loop hit by the Mythos bot, 2026-10-09).
     ("launch-agent-register",
-     r"\blaunchctl\s+(?:load|bootstrap)\b",
-     "This registers a program that will run automatically on this machine from now on. 改做：改用 `launchctl bootstrap gui/$(id -u)/<label>` 帶完整 service target，或放在專案裡用啟動腳本管理。"),
+     r"\blaunchctl\s+(?:load\b|bootstrap\s+(?!(?:gui|user)/))",
+     "This registers a program that will run automatically on this machine from now on. 改做：改用 `launchctl bootstrap gui/$(id -u) <plist 路徑>` 帶完整 domain target（要收回用 `launchctl bootout gui/$(id -u)/<label>`），或放在專案裡用啟動腳本管理。"),
     # `bootout <domain>` with no label tears down every job in that domain, not
     # one service. `bootout gui/501/com.x.y` or a trailing plist path targets a
     # single job, so the lookahead only fires when a bare domain is followed by

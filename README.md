@@ -158,6 +158,15 @@ install.sh                 Codex 安裝器
 update.sh                  git pull --ff-only 後重跑 install.sh
 .claude-plugin/            Claude Code plugin 與 marketplace manifest
 claude/                    Claude Code plugin 的 hooks 與 SessionStart 腳本
+opencode/                  opencode plugin：genie-dedup.js（零 token 去重，見下）
+```
+
+### opencode：零 token 去重
+
+`opencode/genie-dedup.js` 掛在 opencode 的 `experimental.chat.messages.transform`，每輪送給模型前改寫歷史，不呼叫任何模型：同一工具、同一組參數又跑了一次時，舊的那份輸出換成標記，只留最新的；失敗的工具呼叫過了 4 輪後，它那些 ≥200 字的大參數換成標記，錯誤訊息本身保留。使用者和模型的文字一律不動。設計借鏡 opencode-dynamic-context-pruning（AGPL，只借設計、不抄碼），所以兩者不要同時裝。`GENIE_DEDUP_ENABLED=0` 關閉。
+
+```bash
+ln -sfn ~/genie-harness/opencode/genie-dedup.js ~/.config/opencode/plugins/genie-dedup.js
 ```
 
 ### 技術選型（為什麼是這樣）
@@ -369,6 +378,15 @@ install.sh                 Codex installer
 update.sh                  git pull --ff-only, then re-run install.sh
 .claude-plugin/            Claude Code plugin + marketplace manifests
 claude/                    Claude Code plugin hooks + SessionStart script
+opencode/                  opencode plugin: genie-dedup.js (zero-token dedup, below)
+```
+
+### opencode: zero-token dedup
+
+`opencode/genie-dedup.js` hooks opencode's `experimental.chat.messages.transform` and rewrites the history before each turn, calling no model: when the same tool runs again with the same arguments, the older output becomes a marker and only the newest is kept; 4 turns after a tool call failed, its large (≥200 chars) arguments become markers while the error itself stays. User and assistant text is never touched. The design is borrowed from opencode-dynamic-context-pruning (AGPL; design only, no code copied), so do not install both. `GENIE_DEDUP_ENABLED=0` turns it off.
+
+```bash
+ln -sfn ~/genie-harness/opencode/genie-dedup.js ~/.config/opencode/plugins/genie-dedup.js
 ```
 
 ### Why this stack

@@ -37,6 +37,7 @@ import subprocess
 import sys
 import time
 import unicodedata
+from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # install.sh puts the model in the checkout; the Claude Code plugin puts it in
@@ -46,6 +47,94 @@ MODEL_DIR = os.environ.get("GENIE_MODEL_DIR") or next(
      if os.path.isfile(os.path.join(d, "vocab.json"))), os.path.join(HERE, "model"))
 INTENTS = json.load(open(os.path.join(HERE, "intents.json"), encoding="utf-8"))
 UNSURE = "unsure"
+
+# Long session reminder
+LONG_SESSION_DEFAULT_MIN = 150
+LONG_SESSION_THROTTLE_SEC = 30 * 60  # 30 minutes
+
+
+def _check_long_session(data):
+    """Check if session has run long enough to warrant a reminder.
+    Returns reminder string or None.
+    Reads at most first 20 lines of transcript JSONL for first timestamp.
+    Throttles via a mark file in $GENIE_STATE_DIR/long-<session_id>.
+    """
+    try:
+        threshold = int(os.environ.get("GENIE_LONG_SESSION_MIN", str(LONG_SESSION_DEFAULT_MIN)))
+    except Exception:
+        threshold = LONG_SESSION_DEFAULT_MIN
+    if threshold == 0:
+        return None
+
+    transcript_path = data.get("transcript_path")
+    session_id = data.get("session_id")
+    if not transcript_path or not session_id:
+        return None
+
+    # Sanitize session_id for filesystem
+    safe_sid = re.sub(r"[^A-Za-z0-9_-]", "", session_id)
+    if not safe_sid:
+        return None
+
+    # Read first timestamp from transcript (max 20 lines)
+    ts = None
+    try:
+        with open(transcript_path, "r", encoding="utf-8") as f:
+            for i, line in enumerate(f):
+                if i >= 20:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                    if "timestamp" in rec:
+                        ts_str = rec["timestamp"]
+                        # Parse ISO8601, handle Z suffix
+                        if ts_str.endswith("Z"):
+                            ts_str = ts_str[:-1] + "+00:00"
+                        ts = datetime.fromisoformat(ts_str)
+                        break
+                except Exception:
+                    continue
+    except Exception:
+        return None
+
+    if ts is None:
+        return None
+
+    # Ensure ts is timezone-aware
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    elapsed_min = int((now - ts).total_seconds() // 60)
+    if elapsed_min < threshold:
+        return None
+
+    # Throttle: check mark file
+    state_dir = os.environ.get("GENIE_STATE_DIR", os.path.expanduser("~/.genie/state"))
+    mark_path = os.path.join(state_dir, f"long-{safe_sid}")
+    try:
+        os.makedirs(state_dir, exist_ok=True)
+        if os.path.exists(mark_path):
+            with open(mark_path, "r", encoding="utf-8") as f:
+                last = int(f.read().strip() or "0")
+            if time.time() - last < LONG_SESSION_THROTTLE_SEC:
+                return None
+        # Write new mark
+        with open(mark_path, "w", encoding="utf-8") as f:
+            f.write(str(int(time.time())))
+    except Exception:
+        pass  # throttle is best-effort
+
+    return (
+        f"LONG SESSION: this conversation has run {elapsed_min} minutes. "
+        f"Long sessions get slower and can crash. Before the next big step, "
+        f"write a short progress summary, then suggest starting a fresh conversation "
+        f"with /clear (/compact does not free memory)."
+    )
+
 
 # Route extension imports
 try:
@@ -205,6 +294,19 @@ def confidence(intent, score, why):
 LOG_MAX_BYTES = 1024 * 1024
 # API keys, tokens, long paths: any run of 24+ url-safe chars is opaque, not prose.
 SECRET_RUN = re.compile(r"[A-Za-z0-9_\-]{24,}")
+
+# High-confidence secret shapes with known prefixes. Only these trigger the
+# SECRET: injection line -- the generic SECRET_RUN is too noisy for that.
+SECRET_SHAPES = [
+    re.compile(r"(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_-]{20,}"),
+    re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}"),
+    re.compile(r"(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}"),
+    re.compile(r"(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{30,}"),
+    re.compile(r"(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}"),
+    re.compile(r"(?<![A-Za-z0-9])xox[abpr]-[A-Za-z0-9-]{10,}"),
+    re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}"),
+    re.compile(r"(?<![A-Za-z0-9])-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+]
 
 
 def log_path():
@@ -484,6 +586,10 @@ def hook(raw, host="codex"):
         return ""
     if NOT_USER_TURN.match(text):
         return ""
+    # Secret detection: if the prompt contains a high-confidence secret shape,
+    # inject a one-line warning into additionalContext. This runs even when the
+    # router abstains (no intent tag, no DO line).
+    secret_hit = any(p.search(text) for p in SECRET_SHAPES)
     intent, score, why = classify(text)
     conf = confidence(intent, score, why)
     if os.environ.get("GENIE_DEBUG"):
@@ -498,6 +604,17 @@ def hook(raw, host="codex"):
     # degraded keeps its DO: it says the router is broken, not a guess.
     order = not abstain and (conf == "high" or degraded)
     lines = [] if abstain else ["genie: intent=%s conf=%s" % (intent, conf)]
+    if secret_hit:
+        lines.append(
+            "SECRET: the user just pasted what looks like a credential. "
+            "Do not repeat its value, do not write it into any file or commit. "
+            "In one plain sentence, suggest keeping it in an environment variable or the macOS Keychain instead."
+        )
+
+    # Long session reminder: runs even when router abstains
+    long_session_reminder = _check_long_session(data)
+    if long_session_reminder:
+        lines.append(long_session_reminder)
 
     ext_log = None
     if rx is not None:

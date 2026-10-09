@@ -21,6 +21,10 @@ Two tiers, because `PreToolUse` supports both:
   credentials, invisible published artifacts, privilege escalation.
   WARN is for "this might be fine, or might be the end of your project".
 
+  Reading is not denied. Printing a credential's *value* is (`secret-readout`):
+  once it is on stdout it is in the transcript, and the transcript is sent to the
+  model provider. `cut -d= -f1 .env` and `test -n "$X"` stay allowed.
+
 Deliberately allowed: ordinary destructive-but-recoverable work
 (`rm -rf node_modules`, `rm -rf dist`, `git reset --hard` on a feature branch).
 Over-blocking a beginner's normal work is its own failure mode.
@@ -110,6 +114,13 @@ BASH_DENY = [
     ("launch-agent-register",
      r"\blaunchctl\s+(?:load|bootstrap)\b",
      "This registers a program that will run automatically on this machine from now on. 改做：改用 `launchctl bootstrap gui/$(id -u)/<label>` 帶完整 service target，或放在專案裡用啟動腳本管理。"),
+    # `bootout <domain>` with no label tears down every job in that domain, not
+    # one service. `bootout gui/501/com.x.y` or a trailing plist path targets a
+    # single job, so the lookahead only fires when a bare domain is followed by
+    # the end of the line or a `;`/`&`/`|` separator.
+    ("launchctl-domain-bootout",
+     r"\blaunchctl\s+bootout\s+(?:(?:gui|user|login)/(?:\d+|\$\(\s*id\s+-u\s*\)|\$\{?UID\}?)|system)(?=\s*(?:[;&|]|\Z))",
+     "This boots out a whole launchd domain: every background program on this machine stops and the login window comes back, and you cannot undo it from a remote session. 改做：改用 `launchctl bootout gui/$(id -u)/<label>` 只停那一個服務。"),
     ("shell-profile-write",
      r"[<>]{1,2}\s*~?/?\.(?:bashrc|zshrc|bash_profile|profile|zprofile|zshenv)\b",
      "This edits a shell startup file, which silently changes how every future terminal behaves. 改做：改寫專案內的 `.env` 或 Makefile，或先 `cp ~/.zshrc ~/.zshrc.bak` 留備份再改。"),
@@ -350,6 +361,13 @@ def inspect_command(cmd, _depth=0):
     if any(h[0] == "deny" for h in hits):
         return [h for h in hits if h[0] == "deny"]
 
+    # Printing a secret is its own catastrophe, and it is a function of the
+    # command rather than of a keyword, so it lives next to the tables above
+    # rather than inside one of them.
+    hits = inspect_secret_readout(stripped)
+    if hits:
+        return hits
+
     for name, rx, pred, reason in TARGET_DENY_C:
         for m in rx.finditer(live):
             try:
@@ -406,6 +424,83 @@ GIT_WARN_C = [(n, cond, re.compile(p), r) for n, cond, p, r in GIT_WARN]
 SECRET_FILE = re.compile(
     r"(?:^|/)(?:\.env(?!\.(?:example|sample|template)\b)(?:\.[\w.-]+)?|[^/]+\.(?:pem|key|p12)"
     r"|id_(?:rsa|ed25519|ecdsa)|credentials(?:\.json)?|secrets?\.(?:json|ya?ml|env))$")
+
+
+# --- secret-readout ----------------------------------------------------------
+# A credential's *value* is the one thing this gate cannot let through quietly:
+# once it is printed it is in the transcript, and the transcript goes to the
+# model provider and stays in the user's scrollback. `rm -rf /` is a disaster you
+# can undo by not running it; this one is done the moment it prints.
+#
+# Reading is still allowed. Only the value is denied: `cut -d= -f1 .env`,
+# `grep -c`, `wc -l` and `test -f` hand over a name or a number, which is exactly
+# what you need to answer "is this set?" without handing over the secret.
+SECRET_READOUT_REASON = (
+    "The value would be copied into this conversation and sent to the model provider. "
+    "改做：只看變數名用 `cut -d= -f1 .env`；確認有沒有設用 `test -n \"$X\" && echo set`。"
+)
+# Commands whose whole job is to put a file's bytes on stdout.
+READER_RE = re.compile(r"\b(?:cat|less|more|head|tail|bat|nl|strings|xxd|od)\b([^|;&]*)")
+# `printenv`/`env`/`set` with no argument dump every variable in the environment.
+ENV_DUMP_RE = re.compile(r"\s*(?:printenv|env|set)\s*")
+# `$NAME` / `${NAME}` in an echo/printf argument.
+VAR_REF = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
+# A variable whose *name* says it holds a credential.
+SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|PASSWD", re.IGNORECASE)
+
+
+def _is_secret_path(tok):
+    """True when an argument names a credential file. `SECRET_FILE` is the one
+    definition of "looks like a secret file" in this file -- reused, not copied."""
+    return bool(SECRET_FILE.search(tok.strip().strip("\"'")))
+
+
+def inspect_secret_readout(cmd):
+    """-> [] or [("deny", "secret-readout", reason)] for a command that would
+    print a credential's value.
+
+    Three shapes, all of them a deliberate move rather than an accident:
+    a file reader aimed at a secret file, a whole-environment dump, or an
+    echo/printf interpolating a variable named like a credential.
+    """
+    if not cmd or not isinstance(cmd, str):
+        return []
+    live = _blank_quotes("\n".join(l.split("#", 1)[0] for l in cmd.splitlines()))
+    deny = [("deny", "secret-readout", SECRET_READOUT_REASON)]
+
+    for m in READER_RE.finditer(live):
+        if any(_is_secret_path(tok) for tok in m.group(1).split()):
+            return deny
+    # Bare `printenv`/`env`/`set` is the whole environment, keys included --
+    # also as the head of a pipeline (`env | grep TOKEN`). With arguments, `env`
+    # runs a command and `set` sets shell options (`gh secret set API_KEY`,
+    # `env API_KEY=x node app` print nothing), so only `printenv NAME` -- whose
+    # arguments are names to print -- is a lookup worth denying.
+    if any(ENV_DUMP_RE.fullmatch(seg) for seg in re.split(r"[|;&]", live)):
+        return deny
+    for m in re.finditer(r"(?<![\w.-])printenv\b([^|;&]*)", live):
+        if any(SECRET_NAME.search(a) for a in m.group(1).split()):
+            return deny
+    for m in re.finditer(r"\b(?:echo|printf)\b([^|;&]*)", live):
+        if any(SECRET_NAME.search(v.group(1)) for v in VAR_REF.finditer(m.group(1))):
+            return deny
+    return []
+
+
+def inspect_read_path(path):
+    """The `Read` tool only ever gets the value-leak rule.
+
+    The write-target rules below are about *writing* into a system or credential
+    file, which is a different mistake from reading one, and applying them to
+    `Read` would block ordinary debugging. So: does the filename look like a
+    secret file, and nothing else.
+    """
+    if not path or not isinstance(path, str):
+        return []
+    base = os.path.basename(os.path.expanduser(path.strip()))
+    if _is_secret_path(base):
+        return [("deny", "secret-readout", SECRET_READOUT_REASON)]
+    return []
 
 
 def _git_changes(cwd):
@@ -543,15 +638,21 @@ def main():
         tool_input = data.get("tool_input")
         if not isinstance(tool_input, dict):
             return
-        hits = inspect_command(tool_input.get("command"))
-        if not hits:
-            hits = inspect_git(tool_input.get("command"), data.get("cwd"))
-        if not hits:
-            for key in ("file_path", "path", "notebook_path"):
-                if tool_input.get(key):
-                    hits = inspect_path(tool_input[key])
-                    if hits:
-                        break
+        hits = []
+        if data.get("tool_name") == "Read":
+            # A read has no write target, so the write-path rules below are the
+            # wrong instrument for it. Only the value-leak rule applies.
+            hits = inspect_read_path(tool_input.get("file_path"))
+        else:
+            hits = inspect_command(tool_input.get("command"))
+            if not hits:
+                hits = inspect_git(tool_input.get("command"), data.get("cwd"))
+            if not hits:
+                for key in ("file_path", "path", "notebook_path"):
+                    if tool_input.get(key):
+                        hits = inspect_path(tool_input[key])
+                        if hits:
+                            break
         if not hits:
             target = next((tool_input.get(k) for k in ("file_path", "path") if tool_input.get(k)), None)
             if target:

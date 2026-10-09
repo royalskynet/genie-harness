@@ -124,6 +124,30 @@ MUST_BLOCK += [
     ('Y="$HOME"; rm -rf $Y', "quoted variable indirection"),
 ]
 
+# `launchctl bootout <domain>` with no label tears down every job in that
+# domain. The same command with a `/<label>` or a plist path stops one service.
+MUST_BLOCK += [
+    ("launchctl bootout gui/$(id -u)", "bootout a whole gui domain"),
+    ("launchctl bootout gui/501", "bootout a whole gui domain"),
+    ("launchctl bootout system", "bootout a whole system domain"),
+    ("launchctl bootout gui/501 && echo ok", "bootout domain before a separator"),
+]
+
+# A credential's value is the only thing that must never reach the transcript:
+# it is sent to the model provider and stays in the scrollback. Reading the file
+# is not the crime, printing it is.
+MUST_BLOCK += [
+    ("cat .env", "print a .env"),
+    ("cat ~/.aws/credentials", "print cloud credentials"),
+    ("head -5 config/.env.local", "print the head of a local env"),
+    ("printenv", "dump the whole environment"),
+    ("env", "dump the whole environment"),
+    ("env | grep TOKEN", "dump the environment into a pipe"),
+    ("printenv OPENAI_API_KEY", "printenv a credential variable"),
+    ("echo $OPENAI_API_KEY", "echo a credential variable"),
+    ("printf '%s' \"${GITHUB_TOKEN}\"", "printf a credential variable"),
+]
+
 MUST_PASS = [
     # ordinary beginner work: reversible, project-local, or read-only
     "rm -rf node_modules",
@@ -160,6 +184,24 @@ MUST_PASS = [
     "git clean -nd",                              # dry run: lists, deletes nothing
     "find . -type f -exec rm {} \\;",            # project-scoped
     "rm -rf build",                               # inside a script
+    # bootout aimed at one job, not at a whole domain
+    "launchctl bootout gui/501/com.example.job",
+    "launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.example.plist",
+    'echo "launchctl bootout gui/501"',           # prose mentioning it
+    # the same facts about a secret, without the value
+    "cut -d= -f1 .env",
+    "grep -c API_KEY .env",
+    "wc -l .env",
+    "test -f .env",
+    "cat .env.example",
+    "printenv HOME",
+    # `env`/`set` with arguments set or run things; they print no value
+    "env API_KEY=x node app.js",
+    "docker run --env-file .env -e API_KEY img",
+    "npm config set //registry.npmjs.org/:_authToken $NPM_TOKEN_FILE",
+    "set -euo pipefail",
+    "echo $HOME",
+    "cat README.md",
 ]
 
 # A1: writing a script is the obvious way around a command-only gate.
@@ -244,6 +286,64 @@ def check_git_state():
     return fails
 
 
+def check_read_tool():
+    """The `Read` tool gets the value-leak rule and only that rule.
+
+    The failure this pins in both directions: `Read .env` puts every secret in
+    the transcript in one call, and a gate that blocked `Read .env.example` or
+    `Read README.md` would be blocking the two files a beginner most needs to
+    read safely.
+    """
+    fails = []
+
+    def decision(ti):
+        p = run(json.dumps({"tool_name": "Read", "tool_input": ti}))
+        if not p.stdout.strip():
+            return "allow"
+        return json.loads(p.stdout)["hookSpecificOutput"].get("permissionDecision", "warn")
+
+    for ti, why in (({"file_path": "/tmp/x/.env"}, "read a .env"),
+                    ({"file_path": os.path.expanduser("~/.aws/credentials")},
+                     "read cloud credentials"),
+                    ({"file_path": "config/.env.local"}, "read a local env")):
+        if decision(ti) != "deny":
+            fails.append("READ NOT BLOCKED: %s (%s) -> %r" % (ti["file_path"], why, decision(ti)))
+    for ti, why in (({"file_path": "/tmp/x/.env.example"}, "example file holds no value"),
+                    ({"file_path": "README.md"}, "ordinary file")):
+        if decision(ti) != "allow":
+            fails.append("READ FALSE POSITIVE: %s (%s) -> %r" % (ti["file_path"], why, decision(ti)))
+    # the write-path rules must not leak onto Read: reading /etc/passwd is not
+    # the same mistake as writing to a system directory
+    if decision({"file_path": "/etc/passwd"}) == "deny":
+        fails.append("WRITE RULE APPLIED TO READ: /etc/passwd is not a write target")
+    return fails
+
+
+def check_prefs_cannot_disable_it():
+    """B1, seen from the guard side: a hostile prefs file cannot switch this off.
+
+    Prefs are a narrative-layer setting. They can turn the glossary off; they
+    cannot turn the gate off, and that has to hold for the new rule too -- a
+    secret-readout that a prefs file could silence would be one `!` away from
+    printing every key in the environment.
+    """
+    fails = []
+    with tempfile.TemporaryDirectory() as td:
+        env = {"GENIE_PREFS": os.path.join(td, "prefs.json")}   # never written
+        for cmd in ("rm -rf /", "cat .env", "printenv"):
+            p = run(json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}), env=env)
+            out = p.stdout.strip()
+            dec = json.loads(out)["hookSpecificOutput"].get("permissionDecision") if out else "allow"
+            if dec != "deny":
+                fails.append("ENFORCEMENT LOST: %r with a hostile prefs file -> %r" % (cmd, dec))
+        for cmd in ("cut -d= -f1 .env", "cat README.md"):
+            p = run(json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}), env=env)
+            if p.stdout.strip():
+                fails.append("FALSE POSITIVE: %r with a hostile prefs file -> %s"
+                             % (cmd, p.stdout.strip()[:70]))
+    return fails
+
+
 def main():
     fails = []
     for payload, why in MUST_BLOCK:
@@ -303,6 +403,8 @@ def main():
 
     fails += check_git_state()
     fails += check_deny_says_alternative()
+    fails += check_read_tool()
+    fails += check_prefs_cannot_disable_it()
 
     total = (len(MUST_BLOCK) + len(MUST_WARN) + len(MUST_PASS)
              + len(MUST_BLOCK_FILES) + len(MUST_BLOCK_WRITES) + len(MUST_PASS_WRITES))

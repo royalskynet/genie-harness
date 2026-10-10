@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-check for the shadow reply audit. Run: python3 router/test_reply_audit.py
+"""Self-check for the shadow reply audit (Codex and Claude Code hosts). Run: python3 router/test_reply_audit.py
 
 What must hold, and why:
   * NEVER BLOCKS -- shadow mode exists to measure precision first; any stdout or a
@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOOK = os.path.join(HERE, "reply_audit.py")
@@ -31,13 +32,14 @@ def fake_judge(tmp, body):
     return path
 
 
-def run(payload, tmp, judge=None, extra_env=None):
+def run(payload, tmp, judge=None, extra_env=None, host="claude"):
     log = os.path.join(tmp, "audit.jsonl")
-    env = dict(os.environ, GENIE_AUDIT_LOG=log, GENIE_AUDIT_CLAUDE=judge or "/nonexistent/claude")
+    env = dict(os.environ, GENIE_AUDIT_LOG=log, GENIE_AUDIT_FOREGROUND="1")
+    env["GENIE_AUDIT_" + host.upper()] = judge or "/nonexistent/" + host
     env.pop("GENIE_REPLY_AUDIT_CHILD", None)
     env.pop("GENIE_REPLY_AUDIT", None)
     env.update(extra_env or {})
-    p = subprocess.run([sys.executable, HOOK], input=json.dumps(payload), env=env,
+    p = subprocess.run([sys.executable, HOOK, "--host", host], input=json.dumps(payload), env=env,
                        capture_output=True, text=True, timeout=30)
     rows = []
     if os.path.exists(log):
@@ -97,6 +99,35 @@ def main():
         ]:
             p, rows = run(payload, tmp, judge, env)
             check(name, rows == [] and p.returncode == 0 and p.stdout == "", str(rows))
+
+    # Codex is the main host: the judge must be the user's own codex, locked read-only.
+    with tempfile.TemporaryDirectory() as tmp:
+        argv = os.path.join(tmp, "argv.txt")
+        judge = fake_judge(tmp, 'printf "%%s\\n" "$@" > %s; echo \'%s\'' % (argv, verdict))
+        p, rows = run({"last_assistant_message": HEDGED}, tmp, judge, host="codex")
+        args = open(argv).read().split("\n") if os.path.exists(argv) else []
+        check("codex host: judged by codex exec",
+              len(rows) == 1 and rows[0]["judge"] == "codex" and args[:1] == ["exec"], str(rows))
+        check("codex host: judge sandbox is read-only",
+              "--sandbox" in args and args[args.index("--sandbox") + 1] == "read-only", str(args[:6]))
+        check("codex host: never blocks", p.returncode == 0 and p.stdout == "", p.stdout)
+
+    # Real mode: `codex exec` kills a hook still running when it exits, so the hook must return
+    # at once and leave the judge to a detached child that still writes the log afterwards.
+    with tempfile.TemporaryDirectory() as tmp:
+        judge = fake_judge(tmp, "sleep 2; echo '%s'" % verdict)
+        t0 = time.time()
+        p, rows = run({"last_assistant_message": HEDGED}, tmp, judge, {"GENIE_AUDIT_FOREGROUND": ""})
+        took = time.time() - t0
+        check("detached: hook returns before the judge finishes",
+              took < 1.5 and rows == [] and p.returncode == 0 and p.stdout == "", "%.1fs %s" % (took, rows))
+        for _ in range(40):
+            _, rows = run({"session_id": "poll"}, tmp)  # no message: reads the log, writes nothing
+            if rows:
+                break
+            time.sleep(0.25)
+        check("detached: judge child still logs after the hook exited",
+              len(rows) == 1 and rows[0]["verdict"].get("rule") == "R4", str(rows))
 
     with tempfile.TemporaryDirectory() as tmp:
         p = subprocess.run([sys.executable, HOOK], input="not json", capture_output=True, text=True,

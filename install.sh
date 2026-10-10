@@ -96,12 +96,15 @@ import hashlib, json, os, re, shlex, shutil, sys
 here, codex = sys.argv[1], sys.argv[2]
 path, cfg = os.path.join(codex, "hooks.json"), os.path.join(codex, "config.toml")
 PY = shlex.quote(sys.executable)
-def _cmd(script):
-    return "%s %s" % (PY, shlex.quote(os.path.join(here, "router", script)))
+def _cmd(script, extra=""):
+    return "%s %s%s" % (PY, shlex.quote(os.path.join(here, "router", script)), extra)
+# (event, matcher, script, timeout, async, extra args)
 HOOKS = [
-    ("UserPromptSubmit", None, "genie_router.py", 5),
-    ("PreToolUse", "Bash|Write|Edit|apply_patch|MultiEdit", "guard_dangerous.py", 5),
+    ("UserPromptSubmit", None, "genie_router.py", 5, False, ""),
+    ("PreToolUse", "Bash|Write|Edit|apply_patch|MultiEdit", "guard_dangerous.py", 5, False, ""),
+    ("Stop", None, "reply_audit.py", 10, False, " --host codex"),
 ]
+TKEY = {"UserPromptSubmit": "user_prompt_submit", "PreToolUse": "pre_tool_use", "Stop": "stop"}
 data = {"hooks": {}}
 already_installed = False
 changed = False
@@ -123,7 +126,7 @@ for _lst in data.get("hooks", {}).values():
 # One registration entry per event, several hooks objects inside it (Codex
 # hooks.json schema). Match entries/hooks by script filename, not by the last
 # token of the quoted command (which breaks when the checkout path has spaces).
-for _event in ("UserPromptSubmit", "PreToolUse"):
+for _event in TKEY:
     _ev_hooks = [h for h in HOOKS if h[0] == _event]
     _scripts = [h[2] for h in _ev_hooks]
     _lst = data.setdefault("hooks", {}).setdefault(_event, [])
@@ -138,16 +141,19 @@ for _event in ("UserPromptSubmit", "PreToolUse"):
         _idx = len(_lst) - 1
     else:
         already_installed = True
-    for _m, _s, _t in [(h[1], h[2], h[3]) for h in _ev_hooks]:
-        _c = _cmd(_s)
+    for _m, _s, _t, _a, _x in [h[1:] for h in _ev_hooks]:
+        _c = _cmd(_s, _x)
+        _want = {"type": "command", "command": _c, "timeout": _t}
+        if _a:
+            _want["async"] = True
         _hooks = _lst[_idx].setdefault("hooks", [])
         _hidx = next((i for i, hh in enumerate(_hooks) if _s in hh.get("command", "")), None)
         if _hidx is None:
-            _hooks.append({"type": "command", "command": _c, "timeout": _t})
+            _hooks.append(_want)
             changed = True
             print("  added %s -> %s" % (_event, _s))
-        elif _hooks[_hidx]["command"] != _c:
-            _hooks[_hidx] = {"type": "command", "command": _c, "timeout": _t}
+        elif _hooks[_hidx] != _want:
+            _hooks[_hidx] = _want
             changed = True
             print("  updated %s -> %s" % (_event, _s))
         else:
@@ -161,10 +167,9 @@ def backup_once(filename):
 # trust entries for every hook we manage; identities must match Codex's
 # hook_hash (see codex-rs hooks/src/engine/discovery.rs).
 _sections = []
-for _event, _matcher, _script, _timeout in HOOKS:
-    _key = "UserPromptSubmit" if _event == "UserPromptSubmit" else "PreToolUse"
-    _tkey = "user_prompt_submit" if _event == "UserPromptSubmit" else "pre_tool_use"
-    _lst = data["hooks"][_key]
+for _event, _matcher, _script, _timeout, _async, _extra in HOOKS:
+    _tkey = TKEY[_event]
+    _lst = data["hooks"][_event]
     _idx = next((i for i, e in enumerate(_lst)
                  if any(_script in h.get("command", "") for h in e.get("hooks", []))), None)
     if _idx is None:
@@ -173,7 +178,7 @@ for _event, _matcher, _script, _timeout in HOOKS:
     _hidx = next(i for i, h in enumerate(_hooks) if _script in h.get("command", ""))
     ident = {"event_name": _tkey,
              "hooks": [{"type": "command", "command": _hooks[_hidx]["command"],
-                        "timeout": _timeout, "async": False}]}
+                        "timeout": _timeout, "async": _async}]}
     _m = _lst[_idx].get("matcher")
     if _m is not None:
         ident["matcher"] = _m

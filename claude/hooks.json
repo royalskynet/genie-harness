@@ -26,7 +26,7 @@
       {
         "hooks": [
           { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/done_gate.py\"", "timeout": 5 },
-          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/reply_audit.py\"", "timeout": 90, "async": true }
+          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/reply_audit.py\" --host claude", "timeout": 10 }
         ]
       }
     ],

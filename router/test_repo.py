@@ -166,6 +166,20 @@ def test_agents_points_at_real_skills(fails):
             notes.append("D2: skills/%s exists but AGENTS.md never points at it" % name)
 
 
+def test_option_rule_agrees_everywhere(fails):
+    """D2 for one rule: the "do not pad to 3 options" rule lives in the router
+    DO lines, AGENTS.md and the wheel card. If one copy keeps "at most 3" while
+    the others say 1-3, the model gets both and fills three slots again."""
+    for rel_path, must in (("AGENTS.md", "不湊滿 3 個"),
+                           ("skills/wheel/SKILL.md", "假平衡"),
+                           ("skills/genie-humanizer/SKILL.md", "語意轉譯")):
+        body = read(os.path.join(ROOT, rel_path))
+        if must not in body:
+            fails.append("D2: %s lost %r" % (rel_path, must))
+        if "最多 3 個" in body:
+            fails.append("D2: %s still says 最多 3 個" % rel_path)
+
+
 def test_agents_does_not_duplicate_skill_bodies(fails):
     """D2: the actual drift. A long, distinctive line must live in one place only."""
     body = read(os.path.join(ROOT, "AGENTS.md"))

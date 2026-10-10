@@ -115,6 +115,13 @@ ALWAYS = (
     "no slop: no colon reveals, no 'not X but Y', no puffery, no meta-commentary, no "
     "profound last line, no unsourced claims; cut any sentence true of any product; "
     "when the evidence favours one side, say so without a token counterpoint",
+    # Semantic translation, both ways. Without it the model echoes their words
+    # back as the spec, and reports "exit 137" as if it were an answer. "Never
+    # rosier" is the part that matters: a plain-words summary is where "partly
+    # worked" quietly becomes "done". Detail in genie-humanizer.
+    "translate meaning both ways: their words -> a checkable target (name your reading "
+    "only if readings differ); your results -> what it means for them, never rosier, "
+    "error text kept verbatim",
     "they cannot type commands: run skills and commands yourself",
 )
 

@@ -154,6 +154,21 @@ def test_dispatch(fails):
                 fails.append("dispatch %s: unfilled placeholder: %r" % (intent, out))
 
 
+def test_options_are_not_padded(fails):
+    """False balance shaped as a menu: "at most 3 options (simplest -> balanced
+    -> freest)" read as three slots, and the model invented a balanced option
+    when the evidence already picked one. Both DO tables must allow a single
+    option and forbid padding, with research on or off."""
+    for res in ({"blocks": {"research": "on"}}, {"blocks": {"research": "off"}}):
+        do = r.dispatch("build_request", res, "codex")
+        for w in ("1 to 3 options", "if one clearly wins", "Never pad to 3"):
+            if w not in do:
+                fails.append("dispatch build_request %s: missing %r: %r"
+                             % (res["blocks"]["research"], w, do))
+        if "at most 3 options" in do:
+            fails.append("dispatch build_request: three-slot wording is back: %r" % do)
+
+
 def test_local_tools_follow_level(fails):
     """Advanced/expert users are pointed at what is already installed; the rest
     are not. Wheel answers "does a wheel exist?", this asks the narrower question
@@ -669,6 +684,7 @@ def test_long_session_reminder(fails):
 def main():
     fails = []
     test_dispatch(fails)
+    test_options_are_not_padded(fails)
     test_local_tools_follow_level(fails)
     test_abstain_is_silent(fails)
     test_low_conf_gives_no_order(fails)

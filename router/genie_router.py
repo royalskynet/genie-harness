@@ -365,6 +365,14 @@ def log_route(text, intent, score, via, conf, ext=None):
 # plugin, so its skills are namespaced and invoked through the Skill tool.
 SKILL_REF = {"codex": "$%s", "claude": "the genie-harness:%s skill"}
 
+# "At most 3 options (simplest -> balanced -> freest)" read as a form with three
+# slots: models filled all three even when the evidence picked one, inventing a
+# "balanced" choice nobody would take. That is false balance shaped as a menu.
+# Shared by DO and DO_NO_WHEEL so the two cannot drift apart.
+OPTIONS = ("1 to 3 options, real contenders only (simplest -> balanced -> freest); "
+           "if one clearly wins, give just that one and say in one line why the others "
+           "lost. Never pad to 3")
+
 # intent -> what to do this turn. `{wheel}` etc. become host skill references.
 # Wheel-first is the point: once the user's goal is known, find what already
 # does it before proposing how. A beginner cannot judge a hand-rolled plan.
@@ -375,8 +383,8 @@ DO = {
                      "turn MUST be {wheel} (Quick), before writing any reply, even if you "
                      "think you know the answer: apps, services, built-in features, "
                      "packages or templates that already do it. Then the verdict in plain "
-                     "words and at most 3 options (simplest -> balanced -> freest), "
-                     "recommend one, and wait for their pick before building.",
+                     "words and " + OPTIONS + ". Recommend one and wait for their go-ahead "
+                     "before building.",
     "research_needed": "your FIRST action this turn MUST be {wheel}, before answering: "
                        "official docs, community consensus, mature repos. Versions and "
                        "prices from official pages, not memory.",
@@ -425,8 +433,8 @@ LOCAL_TOOLS = " Prefer what is already on this machine (skills, CLIs via `--help
 # The user turned research off: same flow, no prior-art search.
 DO_NO_WHEEL = {
     "build_request": "the user wants something that does a job (research is off, so no "
-                     "prior-art search). Give at most 3 options (simplest -> balanced -> "
-                     "freest), recommend one, and wait for their pick before building.",
+                     "prior-art search). Give " + OPTIONS + ". Recommend one and wait for "
+                     "their go-ahead before building.",
     "research_needed": "answer from official docs (research is off, so no wider search); "
                        "say how current your source is.",
     "execute_request": "use {genie-execute}: do every reversible step in one go, stop only "

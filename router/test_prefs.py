@@ -253,6 +253,23 @@ def test_decide_and_proceed_at_every_level(fails):
         fails.append("decide-and-proceed is not in ALWAYS (so it is tunable)")
 
 
+def test_translation_and_no_false_balance_at_every_level(fails):
+    """Semantic translation and no-token-counterpoint are honesty rules, not
+    tone: a plain-words report that turns "partly worked" into "done" is a lie
+    the user acts on. They must reach every level and survive humanize off."""
+    rules = ("translate meaning both ways", "never rosier", "error text kept verbatim",
+             "without a token counterpoint")
+    for lvl in prefs.LEVELS:
+        ctx = prefs.render_context(prefs.resolve("hi", data={"level": lvl}, persist=False))
+        for w in rules:
+            if w not in ctx:
+                fails.append("%r missing at %s" % (w, lvl))
+    ctx = prefs.render_context(prefs.resolve("!humanize off 好", data={}, persist=False))
+    for w in rules:
+        if w not in ctx:
+            fails.append("%r muted by humanize off" % w)
+
+
 def test_stop_cases_and_pinned_lang(fails):
     """The per-turn stop rule names all 4 stop cases, not just 'irreversible': a
     narrower list here would talk the model out of stopping before a publish.

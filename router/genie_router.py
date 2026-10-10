@@ -652,8 +652,6 @@ def hook(raw, host="codex"):
 
 
 def main():
-    if os.environ.get("GENIE_REPLY_AUDIT_CHILD"):
-        return  # the reply-audit judge's own prompt: no routing, no route log
     argv = sys.argv[1:]
     host = "codex"
     if argv[:1] == ["--host"] and len(argv) > 1:

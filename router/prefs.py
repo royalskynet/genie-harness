@@ -113,8 +113,14 @@ ALWAYS = (
     # Rhetorical slop: clear sentences carrying no information, including the
     # defensive counterpoint added to look even-handed. Detail in genie-humanizer.
     "no slop: no colon reveals, no 'not X but Y', no puffery, no meta-commentary, no "
-    "profound last line, no unsourced claims; cut any sentence true of any product; "
-    "when the evidence favours one side, say so without a token counterpoint",
+    "profound last line, no unsourced claims; cut any sentence true of any product",
+    # The old wording ("say so without a token counterpoint") was a prohibition and
+    # was obeyed loosely; this is the shape to produce instead. "Cannot rule out"
+    # is singled out because nothing can be ruled out, so it carries no weight.
+    "verdicts: lead with the answer and its confidence ('A, strong evidence'); raise "
+    "B only with concrete evidence and say how weak it is; 'both possible' only when "
+    "the evidence is even, plus the data that would decide; 'cannot rule out B' is "
+    "not an argument",
     # Semantic translation, both ways. Without it the model echoes their words
     # back as the spec, and reports "exit 137" as if it were an answer. "Never
     # rosier" is the part that matters: a plain-words summary is where "partly

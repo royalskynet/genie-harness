@@ -17,6 +17,15 @@
                  └─ [genie prefs] level=beginner ...
 ```
 
+### 更新（已安裝過）
+
+```bash
+bash ~/genie-harness/update.sh                                                                 # Codex
+claude plugin marketplace update genie-harness && claude plugin update genie-harness@genie-harness   # Claude Code
+```
+
+更新後重開 Codex／Claude Code 才生效。模型和偏好設定不會重下載或被覆蓋。
+
 ### 為什麼要意圖路由
 
 預設使用者是完全的小白：他不會打 `$wheel` 或斜線指令，也不知道有這些 skill。所以每則訊息先在本地用極小的靜態 embedding 模型判斷意圖（關鍵字只是快路徑），hook 用一行 `DO:` 直接告訴模型**這一輪要跑哪個 Genie skill**。模型自己調用，使用者只要講話。
@@ -236,6 +245,15 @@ You type  →  Intent router (0.03–0.12s, ≤63 MB RAM)  →  Codex / Claude C
                  ├─ DO: your FIRST action this turn MUST be $wheel ...   ← the skill to run, named for the model
                  └─ [genie prefs] level=beginner ...
 ```
+
+### Update (already installed)
+
+```bash
+bash ~/genie-harness/update.sh                                                                 # Codex
+claude plugin marketplace update genie-harness && claude plugin update genie-harness@genie-harness   # Claude Code
+```
+
+Restart Codex / Claude Code afterwards. The model and your prefs are kept.
 
 ### Why an intent router
 

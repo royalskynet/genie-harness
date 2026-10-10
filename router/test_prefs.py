@@ -259,7 +259,8 @@ def test_translation_and_no_false_balance_at_every_level(fails):
     the user acts on. They must reach every level and survive humanize off."""
     rules = ("translate meaning both ways", "never rosier", "error text kept verbatim",
              "lead with the answer and its confidence", "say how weak it is",
-             "the data that would decide", "'cannot rule out B' is not an argument")
+             "what you already have", "trailing note, never as the argument",
+             "'cannot rule out B' is not an argument")
     for lvl in prefs.LEVELS:
         ctx = prefs.render_context(prefs.resolve("hi", data={"level": lvl}, persist=False))
         for w in rules:

@@ -117,10 +117,13 @@ ALWAYS = (
     # The old wording ("say so without a token counterpoint") was a prohibition and
     # was obeyed loosely; this is the shape to produce instead. "Cannot rule out"
     # is singled out because nothing can be ruled out, so it carries no weight.
-    "verdicts: lead with the answer and its confidence ('A, strong evidence'); raise "
-    "B only with concrete evidence and say how weak it is; 'both possible' only when "
-    "the evidence is even, plus the data that would decide; 'cannot rule out B' is "
-    "not an argument",
+    # Missing data is demoted to a note: it adds nothing to the answer, while
+    # "we have X, so A" is what makes the answer usable.
+    "verdicts: lead with the answer and its confidence ('A, strong evidence'); back "
+    "it with what you already have: 'X shows Y, so A'; raise B only with concrete "
+    "evidence and say how weak it is; 'both possible' only when the evidence is even; "
+    "what is missing goes in a short trailing note, never as the argument; 'cannot "
+    "rule out B' is not an argument",
     # Semantic translation, both ways. Without it the model echoes their words
     # back as the spec, and reports "exit 137" as if it were an answer. "Never
     # rosier" is the part that matters: a plain-words summary is where "partly

@@ -12,6 +12,46 @@ EDIT_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 REASON = ("You changed files but ran nothing after the last change. Run it once "
           "and show the real output, or say plainly why it cannot be run.")
 
+# Commands that look at the world without exercising the change. Clearing the
+# gate on these made `ls` after an edit count as having run it, which is the
+# whole failure the gate exists to catch: evidence that cannot fail is not
+# evidence. Kept deliberately narrow -- grep/sed/awk/jq/test are assertions as
+# often as they are sightseeing, so they still count as a run.
+NOOP_CMDS = {"cd", "ls", "pwd", "echo", "printf", "date", "which", "command",
+             "true", "clear", "cat", "head", "tail", "wc", "open", "mkdir",
+             "touch", "tree", "file"}
+# `git <sub>` that only reports. `git status` after an edit is the classic
+# "I ran something" that proves nothing about the change.
+NOOP_GIT_SUBS = {"status", "diff", "log", "show", "branch", "remote"}
+
+
+def counts_as_run(command):
+    """True when a Bash command could actually exercise the change.
+
+    Every segment must be a look-only command for the whole line to be
+    discounted: `ls && pytest` runs the tests. Unparseable means it counts,
+    like every other fail-open path in this hook.
+    """
+    text = str(command or "").strip()
+    if not text:
+        return False
+    for seg in text.replace("&&", "\n").replace("||", "\n").replace(";", "\n").replace("|", "\n").split("\n"):
+        words = seg.split()
+        # Skip leading VAR=value env assignments.
+        while words and "=" in words[0] and not words[0].startswith("-"):
+            words = words[1:]
+        if not words:
+            continue
+        head = words[0].rsplit("/", 1)[-1]
+        if head == "git":
+            if len(words) > 1 and words[1] in NOOP_GIT_SUBS:
+                continue
+            return True
+        if head in NOOP_CMDS:
+            continue
+        return True
+    return False
+
 
 def needs_run(path):
     lines = []
@@ -40,7 +80,9 @@ def needs_run(path):
             if not isinstance(b, dict) or b.get("type") != "tool_use":
                 continue
             if b.get("name") == "Bash":
-                pending = False
+                inp = b.get("input") if isinstance(b.get("input"), dict) else {}
+                if counts_as_run(inp.get("command")):
+                    pending = False
             elif b.get("name") in EDIT_TOOLS:
                 inp = b.get("input") if isinstance(b.get("input"), dict) else {}
                 p = inp.get("file_path") or inp.get("notebook_path") or ""

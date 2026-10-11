@@ -90,7 +90,7 @@ claude plugin marketplace update genie-harness && claude plugin update genie-har
 /plugin install genie-harness@genie-harness
 ```
 
-重開 Claude Code。plugin 會註冊六個 hook（SessionStart 載入 `AGENTS.md`、第一次時下載模型、跑自我檢查 `router/selftest.py`（正常時不出聲，閘門或 router 壞了才講一句）；UserPromptSubmit 跑意圖路由 `--host claude`，順便在使用者貼了金鑰時提醒別複述、session 超過 150 分鐘時提醒換新對話；PreToolUse 在 `Bash|Write|Edit|MultiEdit|NotebookEdit|Read` 上跑閘門；PostToolUse／PostToolUseFailure 跑 `router/fail_streak.py`，同一類指令連續失敗 2 次就叫它停下重讀錯誤；Stop 跑完成閘 `router/done_gate.py`），五個 skill 以 `genie-harness:<名稱>` 出現。完成閘只在 Claude Code 生效：改了 `.py`／`.js` 之類的程式檔、最後一次改完卻什麼都沒跑就停下時，它會擋一次，要你真的跑一次貼輸出（或說明為什麼跑不了）；`.md`／`.txt` 純文字改動不擋，Codex 端沒有這個 hook。需要 Python 3.9+ 和 numpy。第一次開 session 會在背景把意圖模型下載到 `~/.genie/model`（只一次，~512 MB → 35 MB，幾分鐘）；下載完成前，router 會請模型自己判斷意圖，一樣先跑 wheel。缺 numpy 時，模型會被告知要主動提議幫他裝。偏好設定存在 `~/.genie/`，跟 Codex 共用。更新：`/plugin marketplace update genie-harness` 後 `/plugin update genie-harness@genie-harness`（或在 `/plugin` 介面點更新），重開 Claude Code 才生效。模型在 plugin 目錄外，更新不會重新下載。移除：`/plugin uninstall genie-harness`。
+重開 Claude Code。plugin 會註冊六個 hook（SessionStart 載入 `AGENTS.md`、第一次時下載模型、跑自我檢查 `router/selftest.py`（正常時不出聲，閘門或 router 壞了才講一句）；UserPromptSubmit 跑意圖路由 `--host claude`，順便在使用者貼了金鑰時提醒別複述、session 超過 150 分鐘時提醒換新對話；PreToolUse 在 `Bash|Write|Edit|MultiEdit|NotebookEdit|Read` 上跑閘門；PostToolUse／PostToolUseFailure 跑 `router/fail_streak.py`，同一類指令連續失敗 2 次就叫它停下重讀錯誤；Stop 跑完成閘 `router/done_gate.py`），五個 skill 以 `genie-harness:<名稱>` 出現。完成閘只在 Claude Code 生效：改了 `.py`／`.js` 之類的程式檔、最後一次改完卻什麼都沒跑就停下時，它會擋一次，要你真的跑一次貼輸出（或說明為什麼跑不了）；`.md`／`.txt` 純文字改動不擋，Codex 端沒有這個 hook。**只看一眼的指令不算跑過**（`ls`／`cat`／`wc`／`git status` 之類）：改完檔跑個 `ls` 就過閘的話，這道閘等於不存在——不會失敗的證據不是證據。`grep`／`sed`／`awk`／`test` 照算，它們常常就是斷言本身。需要 Python 3.9+ 和 numpy。第一次開 session 會在背景把意圖模型下載到 `~/.genie/model`（只一次，~512 MB → 35 MB，幾分鐘）；下載完成前，router 會請模型自己判斷意圖，一樣先跑 wheel。缺 numpy 時，模型會被告知要主動提議幫他裝。偏好設定存在 `~/.genie/`，跟 Codex 共用。更新：`/plugin marketplace update genie-harness` 後 `/plugin update genie-harness@genie-harness`（或在 `/plugin` 介面點更新），重開 Claude Code 才生效。模型在 plugin 目錄外，更新不會重新下載。移除：`/plugin uninstall genie-harness`。
 
 ### Codex：一鍵安裝（Quick Start）
 
@@ -146,7 +146,7 @@ router/
   prefs.py                 區塊解析：level 預設、pin、單次覆寫
   overlap.py               找出也在做 guard／research／style 的其他已裝工具
   guard_dangerous.py       PreToolUse hook：擋災難指令，模糊的先警告
-  done_gate.py             Stop hook（Claude Code 限定）：改了程式檔卻沒跑 → 擋一次
+  done_gate.py             Stop hook（Claude Code 限定）：改了程式檔卻沒跑 → 擋一次（ls/cat 之類不算跑）
   fail_streak.py           PostToolUse(Failure) hook：同類指令連敗 2 次 → 叫它停下重讀錯誤
   selftest.py              SessionStart 自我檢查：閘門、router、hook 路徑，正常時不出聲
   eval_set.json            87 句手寫 dev 語料（不是 benchmark）
@@ -319,7 +319,7 @@ Inside Claude Code:
 /plugin install genie-harness@genie-harness
 ```
 
-Restart Claude Code. The plugin registers six hooks (SessionStart loads `AGENTS.md`, fetches the model on first use and runs the self-check `router/selftest.py`, silent unless the guard or router is broken; UserPromptSubmit runs the intent router with `--host claude`, and also warns when the user pastes a key and when a session passes 150 minutes; PreToolUse runs the guard on `Bash|Write|Edit|MultiEdit|NotebookEdit|Read`; PostToolUse/PostToolUseFailure run `router/fail_streak.py`, which tells the model to stop and re-read after two failures of the same kind of command; Stop runs the done gate `router/done_gate.py`) and the five skills as `genie-harness:<name>`. The done gate is Claude Code only: if a code file (`.py`, `.js`, anything not `.md`/`.txt`) was edited and nothing was run after the last edit, it blocks once and makes you run it and show the real output, or say plainly why it cannot be run. Pure `.md`/`.txt` edits are exempt, and Codex has no such hook. Needs Python 3.9+ and numpy. The first session downloads the intent model in the background into `~/.genie/model` (one time, ~512 MB → 35 MB, a few minutes); until it lands, the router tells the model to judge intent itself, still wheel-first. If numpy is missing, the model is told to offer installing it. Prefs live in `~/.genie/`, shared with Codex. Update with `/plugin marketplace update genie-harness` then `/plugin update genie-harness@genie-harness` (or from the `/plugin` UI), then restart Claude Code; the model lives outside the plugin directory, so it is not downloaded again. Remove with `/plugin uninstall genie-harness`.
+Restart Claude Code. The plugin registers six hooks (SessionStart loads `AGENTS.md`, fetches the model on first use and runs the self-check `router/selftest.py`, silent unless the guard or router is broken; UserPromptSubmit runs the intent router with `--host claude`, and also warns when the user pastes a key and when a session passes 150 minutes; PreToolUse runs the guard on `Bash|Write|Edit|MultiEdit|NotebookEdit|Read`; PostToolUse/PostToolUseFailure run `router/fail_streak.py`, which tells the model to stop and re-read after two failures of the same kind of command; Stop runs the done gate `router/done_gate.py`) and the five skills as `genie-harness:<name>`. The done gate is Claude Code only: if a code file (`.py`, `.js`, anything not `.md`/`.txt`) was edited and nothing was run after the last edit, it blocks once and makes you run it and show the real output, or say plainly why it cannot be run. Pure `.md`/`.txt` edits are exempt, and Codex has no such hook. **Look-only commands do not count as a run** (`ls`, `cat`, `wc`, `git status` and the like): a gate that `ls` clears is not a gate, because evidence that cannot fail is not evidence. `grep`, `sed`, `awk` and `test` still count — they are as often the assertion itself. Needs Python 3.9+ and numpy. The first session downloads the intent model in the background into `~/.genie/model` (one time, ~512 MB → 35 MB, a few minutes); until it lands, the router tells the model to judge intent itself, still wheel-first. If numpy is missing, the model is told to offer installing it. Prefs live in `~/.genie/`, shared with Codex. Update with `/plugin marketplace update genie-harness` then `/plugin update genie-harness@genie-harness` (or from the `/plugin` UI), then restart Claude Code; the model lives outside the plugin directory, so it is not downloaded again. Remove with `/plugin uninstall genie-harness`.
 
 ### Codex: Quick Start (one-line install)
 
@@ -375,7 +375,7 @@ router/
   prefs.py                 block resolution: level defaults, pins, per-call overrides
   overlap.py               finds other installed tools doing guard / research / style
   guard_dangerous.py       PreToolUse hook: deny catastrophic commands, warn on ambiguous ones
-  done_gate.py             Stop hook (Claude Code only): edited code, ran nothing → block once
+  done_gate.py             Stop hook (Claude Code only): edited code, ran nothing → block once (look-only commands do not count)
   fail_streak.py           PostToolUse(Failure) hook: same kind of command fails twice → stop and re-read
   selftest.py              SessionStart self-check of guard, router and hook paths; silent when healthy
   eval_set.json            87 hand-written dev cases (NOT a benchmark)

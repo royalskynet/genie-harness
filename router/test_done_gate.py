@@ -81,6 +81,16 @@ MUST_BLOCK = [
     ("no path on the edit at all", [user(), assistant(edit(None))]),
     ("user turn is a content list",
      [user(as_list=True), assistant(edit("a.py"))]),
+    # Look-only commands are not evidence: a grader that cannot fail passes a
+    # do-nothing agent, so `ls` after an edit must not clear the gate.
+    ("ls after the edit is not a run", [user(), assistant(edit("a.py"), bash("ls -la"))]),
+    ("cat after the edit is not a run",
+     [user(), assistant(edit("a.py"), bash("cat app.py"))]),
+    ("git status after the edit is not a run",
+     [user(), assistant(edit("a.py"), bash("git status --porcelain"))]),
+    ("chained look-only commands are not a run",
+     [user(), assistant(edit("a.py"), bash("cd /tmp && ls | wc -l"))]),
+    ("empty bash command is not a run", [user(), assistant(edit("a.py"), bash("   "))]),
 ]
 
 # --- must pass: nothing to run, or already handled --------------------------
@@ -102,6 +112,13 @@ MUST_PASS = [
     ("no user message at all", [assistant(edit("a.py"))]),
     ("half-written last line",
      [user(), assistant(edit("a.py"), bash()), '{"type":"assist']),
+    ("look-only then a real run", [user(), assistant(edit("a.py"), bash("ls"), bash("pytest -q"))]),
+    ("look-only chained with a real run",
+     [user(), assistant(edit("a.py"), bash("cd app && pytest -q"))]),
+    ("env-prefixed run still counts",
+     [user(), assistant(edit("a.py"), bash("PYTHONPATH=. python3 -m pytest"))]),
+    ("git commit is a real command",
+     [user(), assistant(edit("a.py"), bash("git commit -am wip"))]),
     ("empty transcript", []),
 ]
 

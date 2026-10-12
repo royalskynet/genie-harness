@@ -3,13 +3,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { dedupParts } from './dedup-core.js';
 import * as plugin from './genie-dedup.js';
+import genieHarness from './genie-harness.js';
 
 const tool = (tool, input, output, status = 'completed') => ({ type: 'tool', tool, callID: `${tool}${JSON.stringify(input)}${Math.random()}`, state: status === 'error' ? { status, input, error: 'boom' } : { status, input, output } });
 const msg = (role, ...parts) => ({ info: { role }, parts });
 const big = (c) => c.repeat(5000);
 
-test('module exports only the plugin (opencode calls every export)', () => {
-  assert.deepEqual(Object.keys(plugin), ['GenieDedup']);
+test('module exposes one OpenCode V2 plugin definition', () => {
+  assert.deepEqual(Object.keys(plugin), ['default']);
+  assert.equal(plugin.default.id, 'genie-dedup');
+  assert.equal(typeof plugin.default.setup, 'function');
 });
 
 test('a repeated call keeps only its newest output; key order in args does not matter', () => {
@@ -54,19 +57,40 @@ test('a failed call loses its big input only after errorTurns user turns, error 
   assert.equal(failed.state.input.content.length, 5000); // original part not mutated
 });
 
-test('plugin hook fail-opens on junk and can be switched off', async () => {
-  const hooks = await plugin.GenieDedup();
-  const fn = hooks['experimental.chat.messages.transform'];
-  await fn({}, {});
-  await fn({}, { messages: [null, { parts: [null] }] });
+test('V2 context hook fail-opens on junk and can be switched off', async () => {
+  let contextHook;
+  await plugin.default.setup({
+    session: {
+      hook: async (name, callback) => {
+        assert.equal(name, 'context');
+        contextHook = callback;
+        return { dispose: async () => {} };
+      },
+    },
+  });
+  await contextHook({ messages: [null, { parts: [null] }] });
   const m = [msg('assistant', tool('read', { f: 1 }, big('a'))), msg('assistant', tool('read', { f: 1 }, big('b')))];
   process.env.GENIE_DEDUP_ENABLED = '0';
   try {
-    await fn({}, { messages: m });
+    await contextHook({ messages: m });
     assert.equal(m[0].parts[0].state.output, big('a'));
   } finally {
     delete process.env.GENIE_DEDUP_ENABLED;
   }
-  await fn({}, { messages: m });
+  await contextHook({ messages: m });
   assert.match(m[0].parts[0].state.output, /^\[genie-dedup/);
+});
+
+test('Genie Harness registers V2 context and tool hooks', async () => {
+  const registered = [];
+  await genieHarness.setup({
+    location: { directory: process.cwd() },
+    session: {
+      hook: async (name) => { registered.push(`session.${name}`); return { dispose: async () => {} }; },
+    },
+    tool: {
+      hook: async (name) => { registered.push(`tool.${name}`); return { dispose: async () => {} }; },
+    },
+  });
+  assert.deepEqual(registered, ['session.context', 'tool.execute.before']);
 });

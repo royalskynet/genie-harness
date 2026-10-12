@@ -19,13 +19,14 @@ grep -iF -e "<關鍵字1>" -e "<關鍵字2>" ~/.wheel/registry.tsv 2>/dev/null |
 
 - 不帶解法詞彙重述一句。問：不做會怎樣？能刪掉需求嗎？→ **不做**。真問題其實是別的 → **換題**。
 - 寫 2–3 組別的社群會用的說法（至少一組英文），先寫排除條件再看候選。
+- 找龍頭名單另加兩種查法：`<已知工具> alternative`、`awesome <主題>`（策展清單常比 stars 排序先列出業界主流）。
 
 ## 2. 定深度（不是每次都全跑——全跑一週就會被關掉）
 
 | 深度 | 何時 | 要跑 |
 |---|---|---|
 | Quick | 易回退的小腳本、版本號查詢 | 本機已裝＋輪子軸，≤3 次查詢 |
-| Standard | 模組、新依賴、選型 | 三軸全跑 |
+| Standard | 模組、新依賴、選型 | 三軸全跑；社群軸至少兩種來源（gh issues＋一個討論區），輪子軸要有採用量 |
 | Full | 子系統、難回退 | 三軸＋讀首選候選原始碼＋查維護者 |
 
 ## 3. 三軸（能開 subagent 就並行，只回結論）
@@ -34,8 +35,9 @@ grep -iF -e "<關鍵字1>" -e "<關鍵字2>" ~/.wheel/registry.tsv 2>/dev/null |
 |---|---|---|
 | 本機先看 | `which`／`--help`／已裝依賴／原生功能能不能直接設定 | — |
 | 官方 | 文件 MCP（如 context7）、官方文件與 release notes（版本號以 release 頁為準） | 網搜 `site:<官方域>` |
-| 社群共識 | `gh search issues "<問題或錯誤原文>" --state closed --limit 10`；網搜 Reddit／HN／Stack Overflow | 只剩 gh issues 也算；gh 不能用就 `curl -s "https://api.github.com/search/issues?q=<urlencoded>+is:closed&per_page=10"` |
+| 社群共識 | `gh search issues "<問題或錯誤原文>" --state closed --limit 10`；HN：`curl -s "https://hn.algolia.com/api/v1/search?query=<urlencoded>&tags=story"`（看 points 與留言）；Stack Overflow：`curl -s --compressed "https://api.stackexchange.com/2.3/search/advanced?q=<urlencoded>&site=stackoverflow&sort=votes"`（看 score 與 is_answered）；Reddit 直連 JSON 會被擋，走網搜 `site:reddit.com <q>` 或平台抓取工具 | gh 不能用就 `curl -s "https://api.github.com/search/issues?q=<urlencoded>+is:closed&per_page=10"`；全部免登入 |
 | 成熟輪子 | `gh search repos "<q>" --sort stars --limit 10`、`gh search code "<API>"`、`npm view`／`pip index versions`／`brew search` | `curl -s "https://api.github.com/search/repositories?q=<urlencoded>&sort=stars&per_page=10"`（免登入，每分鐘 10 次）；網搜 `github <q>` |
+| 採用量（誰是龍頭） | deps.dev 一次拿 stars／授權／OpenSSF 分數：`curl -s "https://api.deps.dev/v3/projects/github.com%2F<owner>%2F<repo>"`；下載量：`curl -s https://api.npmjs.org/downloads/point/last-month/<pkg>`、`curl -s https://pypistats.org/api/packages/<pkg>/recent` | 不是套件（CLI、服務）就看 release 下載數或 `brew info` 的 install 數；都沒有就寫「採用量不明」 |
 
 **能力不齊時**：開工先看手上有哪些（有沒有網搜、文件 MCP，`gh auth status`：有裝但沒登入時 `gh search` 會失敗，改走上表的 `curl` 免登入 API，不要叫使用者登入）。缺的 lane 寫進卡片「降級：<lane> 不可用」，不假裝查過；三軸全不可用 → 卡片標「未查證」並明說。不要用訓練資料的印象冒充查證結果。
 
@@ -48,6 +50,8 @@ grep -iF -e "<關鍵字1>" -e "<關鍵字2>" ~/.wheel/registry.tsv 2>/dev/null |
 - **成本**：免費優先；要付費、訂閱、信用卡的，對方沒問就不列。依賴越少越好。
 - **Fence check**：一句「它為何長這樣」＋一個採用後會繼承的隱性行為。
 - **可逆性**：採用後它死掉、或自造後爛掉，哪個比較好收拾？
+- **採用量**：龍頭看下載量與被依賴數，不看 stars；stars 高、下載低常是展示型專案。
+- **社群評價**：issue／HN／SO 裡反覆出現的抱怨（踩坑、棄坑原因）要寫進淘汰理由或警示。
 - **Stars 只用來排序找候選，不當分數**；其他維度同分才比。
 
 ## 5. 裁決（7 級，成本低→高；混合方案逐元件各標一級，不發明組合字串）
@@ -74,8 +78,8 @@ grep -iF -e "<關鍵字1>" -e "<關鍵字2>" ~/.wheel/registry.tsv 2>/dev/null |
 ```
 輪子：<裁決> <首選 owner/repo 或工具>（<一句理由>）
 深度：Quick|Standard|Full　降級：<缺的 lane 或 無>
-候選：<A ★n 活躍/授權> ｜ <B …> ｜ 淘汰：<C：原因>
-官方：<URL 或 無>　社群共識：<一句＋URL>
+候選：<A ★n 下載/月 活躍/授權> ｜ <B …> ｜ 淘汰：<C：原因>
+官方：<URL 或 無>　社群共識：<一句＋URL（Standard 起兩個來源）>
 警示：<無 或 授權/活躍/難回退…>
 ```
 

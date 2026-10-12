@@ -11,9 +11,9 @@ Claude Code 叫 `/wheel`，Codex 叫 `$wheel`。概念取自 deja-vu（裁決＋
 ## 0. 先查之前的決定
 
 ```bash
-grep -iF -e "<關鍵字1>" -e "<關鍵字2>" ~/.wheel/registry.tsv 2>/dev/null | tail -5
+python3 <本 skill 目錄>/../../router/wheel_registry.py find "<關鍵字1>" "<關鍵字2>" "<英文說法>"
 ```
-命中且 `review_by` 未過 → 引用該卡，停。過期 → 只重驗首選候選。
+`[有效]` → 引用該卡，停。`[過期]` → 只重驗首選候選。關鍵字給 2–3 個同義說法（含一個英文），單一詞容易漏卡。腳本不在（非 Genie 安裝）就退回 `grep -iF -e "<kw>" ~/.wheel/registry.tsv | tail -5`。
 
 ## 1. 重述問題（可在這裡結束）
 
@@ -104,5 +104,6 @@ grep -iF -e "<關鍵字1>" -e "<關鍵字2>" ~/.wheel/registry.tsv 2>/dev/null |
 一張卡橫跨多個領域時取最快的那級。
 
 ```bash
-D=<30|90|180>; mkdir -p ~/.wheel && printf '%s\t%s\t%s\t%s\t%s\n' "$(date +%F)" "<裁決>" "<問題一句>" "<首選>" "$(date -v+${D}d +%F 2>/dev/null || date -d +${D}days +%F)" >> ~/.wheel/registry.tsv
+python3 <本 skill 目錄>/../../router/wheel_registry.py add "<裁決>" "<問題一句>" "<首選>" <30|90|180>
 ```
+裁決只收第 5 節的 7 個詞，混合方案用全形 `｜` 串接（`設定｜借鏡`）；`+`、括號、半形 `|` 會被拒（exit 2），警示寫進首選欄。`check` 子指令檢查整本登記簿。

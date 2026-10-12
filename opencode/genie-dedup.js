@@ -1,13 +1,15 @@
 import { dedupParts } from './dedup-core.js';
 
-// Only the plugin is exported: opencode runs every exported function as one.
-export const GenieDedup = async () => ({
-  'experimental.chat.messages.transform': async (_input, output) => {
+export default {
+  id: 'genie-dedup',
+  async setup(ctx) {
+    await ctx.session.hook('context', async (event) => {
     if (process.env.GENIE_DEDUP_ENABLED === '0') return;
     try {
-      dedupParts(output?.messages);
+      dedupParts(event?.messages);
     } catch {
-      // fail-open: the model sees the history verbatim
+      // Fail open: the model sees the history verbatim.
     }
+    });
   },
-});
+};

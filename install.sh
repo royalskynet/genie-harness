@@ -225,15 +225,9 @@ else:
     print("hook trust already current")
 EOF
 
-if ! grep -qF "$MARK" "$A" 2>/dev/null; then
-  if [ -f "$A" ] && [ ! -e "$A.bak-genie" ] && [ ! -L "$A.bak-genie" ]; then
-    cp -p "$A" "$A.bak-genie"
-  fi
-  { echo; echo "$MARK"; cat "$HERE/AGENTS.md"; } >> "$A"
-  echo "AGENTS.md appended -> $A"
-else
-  echo "AGENTS.md already present"
-fi
+# Upsert, not append-once: the old marker check froze AGENTS.md at first install,
+# so rule updates never reached existing Codex users. Text outside the fence is kept.
+python3 "$HERE/router/agents_block.py" "$A" "$HERE/AGENTS.md"
 # --- smoke tests (A4/E3) ---
 PY="$(command -v python3)"
 _GUARD="$("$PY" -c 'import os,sys; print(os.path.join(sys.argv[1],"router","guard_dangerous.py"))' "$HERE")"

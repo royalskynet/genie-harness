@@ -18,6 +18,7 @@ python3 <本 skill 目錄>/../../router/wheel_registry.py find "<關鍵字1>" "<
 ## 1. 重述問題（可在這裡結束）
 
 - 不帶解法詞彙重述一句。問：不做會怎樣？能刪掉需求嗎？→ **不做**。真問題其實是別的 → **換題**。
+- 除錯類先驗元件歸屬：崩潰／變慢是哪個行程、哪個元件（崩潰報告的行程名、實際 spawn 的執行檔）。「這麼大的問題竟沒官方修」通常代表查錯了上游。
 - 寫 2–3 組別的社群會用的說法（至少一組英文），先寫排除條件再看候選。
 - 找龍頭名單另加兩種查法：`<已知工具> alternative`、`awesome <主題>`（策展清單常比 stars 排序先列出業界主流）。
 
@@ -35,7 +36,7 @@ python3 <本 skill 目錄>/../../router/wheel_registry.py find "<關鍵字1>" "<
 |---|---|---|
 | 本機先看 | `which`／`--help`／已裝依賴／原生功能能不能直接設定 | — |
 | 官方 | 文件 MCP（如 context7）、官方文件與 release notes（版本號以 release 頁為準） | 網搜 `site:<官方域>` |
-| 社群共識 | `gh search issues "<問題或錯誤原文>" --state closed --limit 10`；HN：`curl -s "https://hn.algolia.com/api/v1/search?query=<urlencoded>&tags=story"`（看 points 與留言）；Stack Overflow：`curl -s --compressed "https://api.stackexchange.com/2.3/search/advanced?q=<urlencoded>&site=stackoverflow&sort=votes"`（看 score 與 is_answered）；Reddit 直連 JSON 會被擋，走網搜 `site:reddit.com <q>` 或平台抓取工具 | gh 不能用就 `curl -s "https://api.github.com/search/issues?q=<urlencoded>+is:closed&per_page=10"`；全部免登入 |
+| 社群共識 | `gh search issues "<問題或錯誤原文>" --limit 10`（不限 closed：根因常在 open issue）＋`gh search prs` 找未合的修補；命中的 issue 要讀留言（根因與 workaround 多在留言不在本文），closed 看關閉原因（`stale` 標籤／bot 關的 ≠ 維護者決定不修）；HN：`curl -s "https://hn.algolia.com/api/v1/search?query=<urlencoded>&tags=story"`（看 points 與留言）；Stack Overflow：`curl -s --compressed "https://api.stackexchange.com/2.3/search/advanced?q=<urlencoded>&site=stackoverflow&sort=votes"`（看 score 與 is_answered）；Reddit 直連 JSON 會被擋，走網搜 `site:reddit.com <q>` 或平台抓取工具 | gh 不能用就 `curl -s "https://api.github.com/search/issues?q=<urlencoded>&per_page=10"`；全部免登入 |
 | 成熟輪子 | `gh search repos "<q>" --sort stars --limit 10`、`gh search code "<API>"`、`npm view`／`pip index versions`／`brew search` | `curl -s "https://api.github.com/search/repositories?q=<urlencoded>&sort=stars&per_page=10"`（免登入，每分鐘 10 次）；網搜 `github <q>` |
 | 採用量（誰是龍頭） | deps.dev 一次拿 stars／授權／OpenSSF 分數：`curl -s "https://api.deps.dev/v3/projects/github.com%2F<owner>%2F<repo>"`；下載量：`curl -s https://api.npmjs.org/downloads/point/last-month/<pkg>`、`curl -s https://pypistats.org/api/packages/<pkg>/recent` | 不是套件（CLI、服務）就看 release 下載數或 `brew info` 的 install 數；都沒有就寫「採用量不明」 |
 

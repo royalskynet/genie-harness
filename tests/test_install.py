@@ -47,6 +47,7 @@ class InstallerTest(unittest.TestCase):
         shutil.copy2(ROOT / "install.sh", repo / "install.sh")
         shutil.copy2(ROOT / "update.sh", repo / "update.sh")
         shutil.copy2(ROOT / "AGENTS.md", repo / "AGENTS.md")
+        shutil.copy2(ROOT / "router" / "agents_block.py", repo / "router" / "agents_block.py")
         (repo / "router" / "model" / "vocab.json").touch()
         return repo
 

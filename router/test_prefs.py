@@ -560,6 +560,13 @@ def test_duplicate_wheel_and_registry(fails):
         eq([k for k, _ in overlap.duplicates([os.path.join(overlap.GENIE_DIR, "skills")])
             if k.startswith("dup:skill:")], [],
            "genie's own wheel is never a duplicate", fails)
+        # Genie maps skills/wheel to royalskynet/wheel-coding: a link to that repo
+        # is the same SKILL.md, so it must not be reported as a drifting copy.
+        with tempfile.TemporaryDirectory() as sk2:
+            os.symlink(os.path.realpath(os.path.join(overlap.GENIE_DIR, "skills", "wheel")),
+                       os.path.join(sk2, "wheel"))
+            eq([k for k, _ in overlap.duplicates([sk2]) if k.startswith("dup:skill:")], [],
+               "a link to the same SKILL.md is the same skill, not a copy", fails)
 
 
 def test_hook_shape_and_fail_open(fails):

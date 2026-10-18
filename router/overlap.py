@@ -25,6 +25,7 @@ import json
 import os
 import re
 import shutil
+import sys
 
 GENIE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -170,6 +171,25 @@ def scan(home=None, dirs=None):
 
 
 WHEEL_REGISTRY = os.path.expanduser("~/.wheel/registry.tsv")
+# Where the standalone skill keeps its registry CLI. Genie maps skills/wheel to
+# the wheel-coding repo, so the CLI arrives through the symlink; the copy inside
+# this checkout is stale the day that repo moves on.
+WHEEL_SKILL_CLI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "skills", "wheel",
+                               "scripts", "wheel_registry.py")
+
+
+def registry_cli():
+    """-> a command list that runs the wheel CLI, or None when only the grep fallback exists.
+
+    Genie prefers the tree the skill itself ships: one grammar for both hosts, and
+    the step-0 reader is no longer a separate implementation that can disagree
+    with the writer. The commands are split because the skill path may contain
+    spaces; callers run the list, never a shell string.
+    """
+    path = os.path.realpath(WHEEL_SKILL_CLI)
+    if not os.path.isfile(path):
+        return None
+    return [sys.executable, path]
 
 
 def legacy_registries():
@@ -177,6 +197,25 @@ def legacy_registries():
     claude = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
     return [os.path.join(claude, "wheel", "registry.tsv"),
             os.path.join(codex_home(), "wheel", "registry.tsv")]
+
+
+def _same_skill(path):
+    """True when `path` and Genie's skills/wheel are the same skill.
+
+    A symlink to our own folder resolves under GENIE_DIR. A symlink to the
+    upstream repo does not, but it is still the one skill, and flagging it as a
+    drifting copy would tell the user to "diff and delete" the very tree Genie
+    runs. Same file, not just same content: two independent checkouts of the same
+    repo can drift.
+    """
+    if _is_genie(path):
+        return True
+    ours = os.path.join(GENIE_DIR, "skills", "wheel", "SKILL.md")
+    theirs = os.path.join(path, "SKILL.md")
+    try:
+        return os.path.isfile(ours) and os.path.isfile(theirs) and os.path.samefile(ours, theirs)
+    except Exception:
+        return False
 
 
 def duplicates(dirs=None):
@@ -190,12 +229,13 @@ def duplicates(dirs=None):
     for d in dirs if dirs is not None else skill_dirs():
         p = os.path.join(d, "wheel")
         try:
-            if os.path.isdir(p) and not _is_genie(p):
+            if os.path.isdir(p) and not _same_skill(p):
                 out.append(("dup:skill:" + p,
-                            "a separate copy of Genie's $wheel skill is installed at %s. Two "
-                            "copies drift apart. Diff it against Genie's skills/wheel/SKILL.md, "
-                            "move any local-only rule into the user's CLAUDE.md/AGENTS.md, then "
-                            "offer to delete the copy (show the exact path, wait for a yes)" % p))
+                            "a separate copy of $wheel is installed at %s. Two copies drift "
+                            "apart. Diff it against Genie's skills/wheel/SKILL.md (currently "
+                            "mapped to royalskynet/wheel-coding), move any local-only rule into "
+                            "the user's CLAUDE.md/AGENTS.md, then replace it with a symlink to "
+                            "Genie's skills/wheel (show the exact path, wait for a yes)" % p))
         except Exception:
             pass
     for r in legacy_registries():

@@ -151,7 +151,7 @@ router/
   selftest.py              SessionStart 自我檢查：閘門、router、hook 路徑，正常時不出聲
   eval_set.json            87 句手寫 dev 語料（不是 benchmark）
   test_router.py           自檢：邊界案例 + dev 語料，per-class，safe=100%，派工
-  test_prefs.py            自檢：19 項，含「關區塊不能關安全」
+  test_prefs.py            自檢：30 項，含「關區塊不能關安全」
   test_guard.py            自檢：49 deny + 4 warn + 5 git 狀態警告、33 must-pass、寫入掃描
   test_done_gate.py        自檢：改完沒跑會擋、跑過就放、純問答與純文字放行
   test_repo.py             自檢：大小預算、無絕對路徑、hook 指向存在、不漂移
@@ -380,7 +380,7 @@ router/
   selftest.py              SessionStart self-check of guard, router and hook paths; silent when healthy
   eval_set.json            87 hand-written dev cases (NOT a benchmark)
   test_router.py           self-check: boundary cases + dev set, per-class, safe=100%, dispatch
-  test_prefs.py            self-check: 19 tests incl. blocks-cannot-disable-enforcement
+  test_prefs.py            self-check: 30 tests incl. blocks-cannot-disable-enforcement
   test_guard.py            self-check: 49 deny + 4 warn rules + 5 git-state warns, 33 must-pass, write scan
   test_done_gate.py        self-check: unrun edits blocked, run-after passes, Q&A and docs pass
   test_repo.py             self-check: size budget, no hardcoded paths, hooks resolve, no drift

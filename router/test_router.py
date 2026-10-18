@@ -132,8 +132,11 @@ def test_dispatch(fails):
         do = r.dispatch(intent, on, "codex")
         if "MUST be $wheel" not in do:
             fails.append("dispatch %s: no wheel-first: %r" % (intent, do))
-    if "genie-harness:wheel" not in r.dispatch("build_request", on, "claude"):
-        fails.append("dispatch: claude host must name the namespaced plugin skill")
+    claude_do = r.dispatch("build_request", on, "claude")
+    if "the wheel skill (/wheel)" not in claude_do or "genie-harness:wheel" in claude_do:
+        fails.append("dispatch: claude host must name the user-level wheel, not the removed plugin skill")
+    if "genie-harness:genie-execute" not in r.dispatch("execute_request", on, "claude"):
+        fails.append("dispatch: claude host must name the namespaced genie-* plugin skills")
     for intent in ("clear_request", "teach_me", "risky_action", "continue"):
         if "wheel" in r.dispatch(intent, on, "codex"):
             fails.append("dispatch %s: wheel where it is not wanted" % intent)

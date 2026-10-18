@@ -118,7 +118,7 @@ def _is_genie(path):
 
 
 def wheel_upstream():
-    """The wheel skill Genie links to: royalskynet/wheel-coding, cloned at
+    """The wheel skill Genie links to: royalskynet/wheel-it, cloned at
     ~/dev/wheel. GENIE_WHEEL_UPSTREAM overrides it (same env var as
     install.sh). Returns the SKILL.md path whether or not it exists."""
     repo = os.environ.get("GENIE_WHEEL_UPSTREAM") or os.path.join(
@@ -180,7 +180,7 @@ def scan(home=None, dirs=None):
 
 
 WHEEL_REGISTRY = os.path.expanduser("~/.wheel/registry.tsv")
-# Where the wheel skill keeps its registry CLI. It lives in the wheel-coding
+# Where the wheel skill keeps its registry CLI. It lives in the wheel-it
 # clone Genie links to, never in this checkout.
 WHEEL_SKILL_CLI = os.path.join(os.path.dirname(wheel_upstream()), "scripts", "wheel_registry.py")
 
@@ -240,7 +240,7 @@ def duplicates(dirs=None):
                 out.append(("dup:skill:" + p,
                             "a separate copy of $wheel is installed at %s. Two copies drift "
                             "apart. Diff it against the wheel skill Genie links "
-                            "(royalskynet/wheel-coding), move any local-only rule into "
+                            "(royalskynet/wheel-it), move any local-only rule into "
                             "the user's CLAUDE.md/AGENTS.md, then replace it with a symlink to "
                             "that same skill (show the exact path, wait for a yes)" % p))
         except Exception:

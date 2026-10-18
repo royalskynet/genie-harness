@@ -3,7 +3,7 @@
 #   1. numpy present?            (only runtime dep)
 #   2. router model              (one-time ~512 MB download -> ~35 MB on disk)
 #   3. skills  -> ~/.agents/skills/{genie-*,wheel}   (symlinks)
-#      wheel lives upstream (royalskynet/wheel-coding); set GENIE_WHEEL_UPSTREAM
+#      wheel lives upstream (royalskynet/wheel-it); set GENIE_WHEEL_UPSTREAM
 #      if its clone is not at ~/dev/wheel.
 #   4. hook    -> ~/.codex/hooks.json        (merged, existing hooks kept)
 #   5. AGENTS.md -> ~/.codex/AGENTS.md       (appended once, marker-guarded)
@@ -34,7 +34,7 @@ python3 "$HERE/router/test_router.py" >/dev/null && echo "router self-check: PAS
 
 mkdir -p "$SKILLS" "$CODEX"
 
-# Skills that live in another repo (skills/wheel -> royalskynet/wheel-coding).
+# Skills that live in another repo (skills/wheel -> royalskynet/wheel-it).
 # Linked here instead of copied, so Genie never carries a drifting second body.
 wheel_upstream() {
   local name="$1" dir="${GENIE_WHEEL_UPSTREAM:-$HOME/dev/wheel}"

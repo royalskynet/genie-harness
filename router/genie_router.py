@@ -364,6 +364,9 @@ def log_route(text, intent, score, via, conf, ext=None):
 # How each host names a skill. Codex: `$wheel`. Claude Code loads Genie as a
 # plugin, so its skills are namespaced and invoked through the Skill tool.
 SKILL_REF = {"codex": "$%s", "claude": "the genie-harness:%s skill"}
+# wheel left the plugin (royalskynet/wheel-it): on Claude Code it is a user-level
+# skill or /wheel command, never `genie-harness:wheel`, which no longer exists.
+WHEEL_REF = {"codex": "$wheel", "claude": "the wheel skill (/wheel)"}
 
 # "At most 3 options (simplest -> balanced -> freest)" read as a form with three
 # slots: models filled all three even when the evidence picked one, inventing a
@@ -487,7 +490,7 @@ def dispatch(intent, res, host="codex"):
         wheel = ""
         do = DO_NO_WHEEL.get(intent, do)
     else:
-        wheel = ref % "wheel"
+        wheel = WHEEL_REF.get(host, WHEEL_REF["codex"])
     # A DO line that names a block the user switched off is an order the model
     # has to disobey; it learns to skip DO lines. Name only what is on.
     if intent == "teach_me":

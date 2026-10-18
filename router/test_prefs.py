@@ -560,7 +560,7 @@ def test_duplicate_wheel_and_registry(fails):
         eq([k for k, _ in overlap.duplicates([os.path.join(overlap.GENIE_DIR, "skills")])
             if k.startswith("dup:skill:")], [],
            "genie's own wheel is never a duplicate", fails)
-        # Genie links skills/wheel to royalskynet/wheel-coding (no copy in the
+        # Genie links skills/wheel to royalskynet/wheel-it (no copy in the
         # repo): a link to the upstream SKILL.md is the same skill, so it must
         # not be reported as a drifting copy.
         upstream = overlap.wheel_upstream()

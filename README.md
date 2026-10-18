@@ -114,12 +114,12 @@ bash ~/genie-harness/update.sh
 
 | 動什麼 | 改法 | 如何復原 |
 |---|---|---|
-| `~/.agents/skills/{genie-*,wheel}` | 4 個 symlink 指回本 repo 的 `skills/`；`wheel` 指到 `~/dev/wheel`（`royalskynet/wheel-coding` 的 clone，`GENIE_WHEEL_UPSTREAM` 可改）。同名舊路徑先移到 `.bak-genie`；既有的 symlink 直接改指，不建備份 | 移除下方列出的五個 Genie symlink，再還原同名備份 |
+| `~/.agents/skills/{genie-*,wheel}` | 4 個 symlink 指回本 repo 的 `skills/`；`wheel` 指到 `~/dev/wheel`（`royalskynet/wheel-it` 的 clone，`GENIE_WHEEL_UPSTREAM` 可改）。同名舊路徑先移到 `.bak-genie`；既有的 symlink 直接改指，不建備份 | 移除下方列出的五個 Genie symlink，再還原同名備份 |
 | `~/.codex/hooks.json` | 新增或更新 `UserPromptSubmit`（router，同時注入 prefs）與 `PreToolUse`（guard）；保留其他 hooks | `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json` |
 | `~/.codex/config.toml` | 新增或更新 hook 對應的 `trusted_hash` | `mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml` |
 | `~/.codex/AGENTS.md` | 尾端加上本專案的 AGENTS.md（一次，marker 防重複） | `mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md` |
 
-既有備份不會被覆蓋。若同名技能的 `.bak-genie` 已存在，安裝器會在替換任何技能連結前停止；請先檢查或移走該備份再重試。`wheel` 的實體在本 repo 外（本 repo 的 `skills/` 只有四個 `genie-*`）。全新安裝時 `~/dev/wheel` 不存在，安裝器不建立 `wheel` 連結、最後以「refusing」失敗——先 clone `royalskynet/wheel-coding` 到該路徑再重跑。已存在的 `wheel` 連結在同一個 clone 消失時也停止，不會改成死連結。
+既有備份不會被覆蓋。若同名技能的 `.bak-genie` 已存在，安裝器會在替換任何技能連結前停止；請先檢查或移走該備份再重試。`wheel` 的實體在本 repo 外（本 repo 的 `skills/` 只有四個 `genie-*`）。全新安裝時 `~/dev/wheel` 不存在，安裝器不建立 `wheel` 連結、最後以「refusing」失敗——先 clone `royalskynet/wheel-it` 到該路徑再重跑。已存在的 `wheel` 連結在同一個 clone 消失時也停止，不會改成死連結。
 
 移除已安裝的 Genie 技能連結，並還原安裝器備份的舊路徑：
 

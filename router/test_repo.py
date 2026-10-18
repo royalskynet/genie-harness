@@ -70,6 +70,20 @@ def test_no_absolute_home_paths(fails):
                              % (rel(f), i, line.strip()[:70]))
 
 
+def test_no_retired_wheel_names(fails):
+    """wheel moved out (repo renamed wheel-coding -> wheel-it, plugin skill gone).
+    An old name in an instruction sends the model to a skill that is not there."""
+    for f in tracked_files():
+        if os.path.basename(f) == "test_repo.py":
+            continue
+        for i, line in enumerate(read(f).splitlines(), 1):
+            if "wheel-coding" in line:
+                fails.append("E5: %s:%d names the old repo wheel-coding (now wheel-it)" % (rel(f), i))
+    for i, line in enumerate(read(os.path.join(ROOT, "AGENTS.md")).splitlines(), 1):
+        if "`genie-harness:wheel`" in line:
+            fails.append("E5: AGENTS.md:%d tells Claude to call the removed genie-harness:wheel" % i)
+
+
 def test_hooks_point_at_real_scripts(fails):
     p = os.path.join(ROOT, "hooks.json")
     try:
@@ -171,7 +185,7 @@ def test_option_rule_agrees_everywhere(fails):
     DO lines, AGENTS.md and the wheel card. If one copy keeps "at most 3" while
     the others say 1-3, the model gets both and fills three slots again.
 
-    wheel lives upstream (royalskynet/wheel-coding, cloned at ~/dev/wheel);
+    wheel lives upstream (royalskynet/wheel-it, cloned at ~/dev/wheel);
     GENIE_WHEEL_UPSTREAM points the check elsewhere."""
     sys.path.insert(0, os.path.join(ROOT, "router"))
     import overlap  # one definition of the upstream path (install.sh mirrors it)

@@ -38,11 +38,13 @@ class InstallerTest(unittest.TestCase):
         )
         shim.chmod(0o755)
 
-    def make_repo(self, parent):
+    def make_repo(self, parent, with_wheel=True):
         repo = parent / "genie-harness"
         (repo / "router" / "model").mkdir(parents=True)
         (repo / "skills").mkdir()
         for name in SKILLS:
+            if name == "wheel" and not with_wheel:
+                continue
             (repo / "skills" / name).mkdir()
         shutil.copy2(ROOT / "install.sh", repo / "install.sh")
         shutil.copy2(ROOT / "update.sh", repo / "update.sh")
@@ -91,6 +93,25 @@ class InstallerTest(unittest.TestCase):
             json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
         return command, digest
+
+    def test_wheel_repoints_to_upstream_when_repo_has_no_skills_wheel(self):
+        # The real repo dropped skills/wheel (cc6954a); a skills/* glob never saw
+        # wheel, so the old link into genie-harness/skills/wheel stayed dead.
+        repo = self.make_repo(self.root / "real-layout", with_wheel=False)
+        home, codex = self.root / "home", self.root / "codex"
+        upstream = home / "dev" / "wheel" / "skills" / "wheel"
+        upstream.mkdir(parents=True)
+        (upstream / "SKILL.md").write_text("---\nname: wheel\n---\n", encoding="utf-8")
+        skill_root = home / ".agents" / "skills"
+        skill_root.mkdir(parents=True)
+        codex.mkdir()
+        os.symlink(repo / "skills" / "wheel", skill_root / "wheel")  # dangling, as seen in real installs
+
+        result = self.run_install(repo, home, codex)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(os.readlink(skill_root / "wheel"), str(upstream))
+        self.assertTrue((skill_root / "wheel" / "SKILL.md").exists())
 
     def test_pep668_failure_prints_usable_user_install_command(self):
         repo = self.make_repo(self.root / "pep668")

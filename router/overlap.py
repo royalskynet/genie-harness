@@ -122,7 +122,7 @@ def wheel_upstream():
     ~/dev/wheel. GENIE_WHEEL_UPSTREAM overrides it (same env var as
     install.sh). Returns the SKILL.md path whether or not it exists."""
     repo = os.environ.get("GENIE_WHEEL_UPSTREAM") or os.path.join(
-        os.path.dirname(GENIE_DIR), "dev", "wheel")
+        os.path.expanduser("~"), "dev", "wheel")  # same default as install.sh
     return os.path.join(repo, "skills", "wheel", "SKILL.md")
 
 

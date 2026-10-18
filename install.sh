@@ -43,6 +43,11 @@ wheel_upstream() {
   echo "$dir/skills/wheel"
 }
 
+# skills/ only holds genie-*; wheel has no directory here any more, so a glob over
+# skills/* never reaches it. List it explicitly.
+SKILL_DIRS=("$HERE"/skills/*)
+[ -e "$HERE/skills/wheel" ] || SKILL_DIRS+=("$HERE/skills/wheel")
+
 is_genie_link() {
   local dest="$1" name="$2" target
   [ -L "$dest" ] || return 1
@@ -55,13 +60,13 @@ is_genie_link() {
 
 # Check every destination before replacing any, so an occupied backup path
 # cannot leave the links half-installed.
-for d in "$HERE"/skills/*; do
+for d in "${SKILL_DIRS[@]}"; do
   name="$(basename "$d")"
   # An upstream that vanished keeps the link where it is (and fails below).
   upstream="$(wheel_upstream "$name" || true)"
   if [ -n "$upstream" ]; then
     d="$upstream"
-  elif [ "$name" = wheel ] && [ -L "$SKILLS/wheel" ]; then
+  elif [ "$name" = wheel ] && [ ! -e "$HERE/skills/wheel" ] && [ -L "$SKILLS/wheel" ]; then
     echo "refusing to repoint $SKILLS/wheel: upstream wheel clone is missing" >&2
     exit 1
   fi
@@ -85,7 +90,7 @@ if ! grep -qF "$MARK" "$A" 2>/dev/null && [ -f "$A" ] &&
   exit 1
 fi
 
-for d in "$HERE"/skills/*; do
+for d in "${SKILL_DIRS[@]}"; do
   name="$(basename "$d")"
   upstream="$(wheel_upstream "$name" || true)"
   if [ -n "$upstream" ]; then
@@ -93,6 +98,10 @@ for d in "$HERE"/skills/*; do
   fi
   dest="$SKILLS/$name"
   backup="$dest.bak-genie"
+  if [ ! -e "$d" ] && [ ! -L "$dest" ]; then
+    echo "skipping $name: upstream clone not found (set GENIE_WHEEL_UPSTREAM)" >&2
+    continue
+  fi
   if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$d" ]; then
     continue
   elif [ -L "$dest" ]; then

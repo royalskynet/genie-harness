@@ -3,6 +3,8 @@
 #   1. numpy present?            (only runtime dep)
 #   2. router model              (one-time ~512 MB download -> ~35 MB on disk)
 #   3. skills  -> ~/.agents/skills/{genie-*,wheel}   (symlinks)
+#      wheel lives upstream (royalskynet/wheel-coding); set GENIE_WHEEL_UPSTREAM
+#      if its clone is not at ~/dev/wheel.
 #   4. hook    -> ~/.codex/hooks.json        (merged, existing hooks kept)
 #   5. AGENTS.md -> ~/.codex/AGENTS.md       (appended once, marker-guarded)
 #   6. hook trust -> ~/.codex/config.toml
@@ -32,6 +34,15 @@ python3 "$HERE/router/test_router.py" >/dev/null && echo "router self-check: PAS
 
 mkdir -p "$SKILLS" "$CODEX"
 
+# Skills that live in another repo (skills/wheel -> royalskynet/wheel-coding).
+# Linked here instead of copied, so Genie never carries a drifting second body.
+wheel_upstream() {
+  local name="$1" dir="${GENIE_WHEEL_UPSTREAM:-$HOME/dev/wheel}"
+  [ "$name" = wheel ] || return 1
+  [ -f "$dir/skills/wheel/SKILL.md" ] || return 1
+  echo "$dir/skills/wheel"
+}
+
 is_genie_link() {
   local dest="$1" name="$2" target
   [ -L "$dest" ] || return 1
@@ -46,12 +57,17 @@ is_genie_link() {
 # cannot leave the links half-installed.
 for d in "$HERE"/skills/*; do
   name="$(basename "$d")"
+  # An upstream that vanished keeps the link where it is (and fails below).
+  upstream="$(wheel_upstream "$name" || true)"
+  if [ -n "$upstream" ]; then
+    d="$upstream"
+  elif [ "$name" = wheel ] && [ -L "$SKILLS/wheel" ]; then
+    echo "refusing to repoint $SKILLS/wheel: upstream wheel clone is missing" >&2
+    exit 1
+  fi
   dest="$SKILLS/$name"
   backup="$dest.bak-genie"
-  if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$d" ]; then
-    continue
-  fi
-  if is_genie_link "$dest" "$name"; then
+  if [ -L "$dest" ]; then
     continue
   fi
   if [ -e "$dest" ] || [ -L "$dest" ]; then
@@ -71,11 +87,22 @@ fi
 
 for d in "$HERE"/skills/*; do
   name="$(basename "$d")"
+  upstream="$(wheel_upstream "$name" || true)"
+  if [ -n "$upstream" ]; then
+    d="$upstream"
+  fi
   dest="$SKILLS/$name"
   backup="$dest.bak-genie"
   if [ -L "$dest" ] && [ "$(readlink "$dest")" = "$d" ]; then
     continue
-  elif is_genie_link "$dest" "$name"; then
+  elif [ -L "$dest" ]; then
+    # An existing link is ours to repoint: relative paths, a moved clone and
+    # the wheel hand-off must not leave a backup chain behind. But an upstream
+    # that vanished must fail loud, not become a dangling link.
+    if [ ! -e "$d" ]; then
+      echo "refusing to link $dest -> $d: target does not exist" >&2
+      exit 1
+    fi
     ln -sfn "$d" "$dest"
   else
     if [ -e "$dest" ] || [ -L "$dest" ]; then

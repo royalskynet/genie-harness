@@ -169,9 +169,15 @@ def test_agents_points_at_real_skills(fails):
 def test_option_rule_agrees_everywhere(fails):
     """D2 for one rule: the "do not pad to 3 options" rule lives in the router
     DO lines, AGENTS.md and the wheel card. If one copy keeps "at most 3" while
-    the others say 1-3, the model gets both and fills three slots again."""
+    the others say 1-3, the model gets both and fills three slots again.
+
+    wheel lives upstream (royalskynet/wheel-coding, cloned at ~/dev/wheel);
+    GENIE_WHEEL_UPSTREAM points the check elsewhere."""
+    wheel = os.path.join(os.environ.get("GENIE_WHEEL_UPSTREAM") or
+                         os.path.join(os.path.dirname(ROOT), "dev", "wheel"),
+                         "skills", "wheel", "SKILL.md")
     for rel_path, must in (("AGENTS.md", "不湊滿 3 個"),
-                           ("skills/wheel/SKILL.md", "假平衡"),
+                           (wheel, "假平衡"),
                            ("skills/genie-humanizer/SKILL.md", "語意轉譯")):
         body = read(os.path.join(ROOT, rel_path))
         if must not in body:

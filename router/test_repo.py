@@ -173,9 +173,9 @@ def test_option_rule_agrees_everywhere(fails):
 
     wheel lives upstream (royalskynet/wheel-coding, cloned at ~/dev/wheel);
     GENIE_WHEEL_UPSTREAM points the check elsewhere."""
-    wheel = os.path.join(os.environ.get("GENIE_WHEEL_UPSTREAM") or
-                         os.path.join(os.path.dirname(ROOT), "dev", "wheel"),
-                         "skills", "wheel", "SKILL.md")
+    sys.path.insert(0, os.path.join(ROOT, "router"))
+    import overlap  # one definition of the upstream path (install.sh mirrors it)
+    wheel = overlap.wheel_upstream()
     for rel_path, must in (("AGENTS.md", "不湊滿 3 個"),
                            (wheel, "假平衡"),
                            ("skills/genie-humanizer/SKILL.md", "語意轉譯")):

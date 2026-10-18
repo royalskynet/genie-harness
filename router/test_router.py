@@ -30,6 +30,9 @@ sys.path.insert(0, HERE)
 # the tests would silently eat the OVERLAP/COEXIST line they had not seen yet.
 os.environ.setdefault("GENIE_PREFS", os.path.join(tempfile.mkdtemp(prefix="genie-test-"),
                                                   "prefs.json"))
+# Same leak for the developer's ~/.genie/route_ext.json: its escalate_cmd is a live
+# (paid) judge, and every grey-band fixture below would call it once per run.
+os.environ.setdefault("GENIE_ROUTE_EXT", "0")
 import genie_router as r  # noqa: E402
 
 CASES = [
@@ -686,6 +689,9 @@ def test_long_session_reminder(fails):
 
 def main():
     fails = []
+    # 10-18: 128 of 344 paid judge calls were these fixtures; the guard must fail loud.
+    if r.rx.load_config("claude") is not None:
+        fails.append("route_ext: tests can see a live route_ext config (set GENIE_ROUTE_EXT=0)")
     test_dispatch(fails)
     test_options_are_not_padded(fails)
     test_local_tools_follow_level(fails)

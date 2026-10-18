@@ -24,6 +24,7 @@ _real_scan = overlap.scan
 overlap.scan = lambda *a, **k: {}
 
 PREFS_HOOK = os.path.join(HERE, "genie_router.py")  # the one UserPromptSubmit hook
+os.environ.setdefault("GENIE_ROUTE_EXT", "0")  # never reach the real (paid) escalate_cmd
 
 
 def eq(got, want, label, fails):

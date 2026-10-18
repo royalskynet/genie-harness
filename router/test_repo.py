@@ -21,6 +21,7 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.environ.setdefault("GENIE_ROUTE_EXT", "0")  # subprocess hooks must not reach the paid escalate_cmd
 
 # D1: Codex truncates around 32 KiB. Fail well under it, warn well under that.
 AGENTS_WARN = 16 * 1024

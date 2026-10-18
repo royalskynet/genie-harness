@@ -15,6 +15,9 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+# Cases without their own GENIE_ROUTE_EXT must not fall back to the developer's
+# real config (its escalate_cmd is a paid judge); run_hook restores to this value.
+os.environ.setdefault("GENIE_ROUTE_EXT", "0")
 import genie_router as gr
 
 

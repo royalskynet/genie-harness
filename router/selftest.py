@@ -104,6 +104,7 @@ def main():
         env["GENIE_PREFS"] = os.path.join(tmpdir, "p.json")
         env["GENIE_LOG"] = "0"
         env["GENIE_STATE_DIR"] = tmpdir
+        env["GENIE_ROUTE_EXT"] = "0"  # the user's escalate_cmd is a paid judge
 
         failed = []
         for name, check_fn in [

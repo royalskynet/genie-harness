@@ -115,8 +115,8 @@ BASH_DENY = [
     # loads an entire directory when handed one. `bootstrap gui/<uid> <plist>`
     # registers exactly one job and `bootout gui/<uid>/<label>` takes it back,
     # so that form stays allowed -- otherwise the reason text names a remedy
-    # this very rule denies, and the model can never comply (fix: dead-end
-    # advice loop hit in real use, 2026-10-09).
+    # this very rule denies, and the model can never comply (a dead-end
+    # advice loop seen in practice).
     ("launch-agent-register",
      r"\blaunchctl\s+(?:load\b|bootstrap\s+(?!(?:gui|user)/))",
      "This registers a program that will run automatically on this machine from now on. 改做：改用 `launchctl bootstrap gui/$(id -u) <plist 路徑>` 帶完整 domain target（要收回用 `launchctl bootout gui/$(id -u)/<label>`），或放在專案裡用啟動腳本管理。"),

@@ -105,7 +105,7 @@ class InstallerTest(unittest.TestCase):
         skill_root = home / ".agents" / "skills"
         skill_root.mkdir(parents=True)
         codex.mkdir()
-        os.symlink(repo / "skills" / "wheel", skill_root / "wheel")  # dangling, as seen in real installs
+        os.symlink(repo / "skills" / "wheel", skill_root / "wheel")  # dangling: the wheel clone is missing
 
         result = self.run_install(repo, home, codex)
 

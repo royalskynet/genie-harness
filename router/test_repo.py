@@ -7,6 +7,8 @@ things which silently rot across machines and across time have not rotted yet:
   D1  AGENTS.md silently truncated once it grows (openai/codex#43075, 32 KiB)
   D2  a rule body copied into both AGENTS.md and a skill, then the two drift
   E4  an absolute path from one developer's machine ends up committed
+  E5  the author's machine names, private tools or private fix-log ids end up
+      in this public repo, where they mean nothing to anyone who installs it
   A5  hooks.json points at a script that was renamed or never added
   --  shell and python that do not even parse
 
@@ -69,6 +71,37 @@ def test_no_absolute_home_paths(fails):
             if pat.search(line):
                 fails.append("E4: %s:%d hardcodes a home path: %s"
                              % (rel(f), i, line.strip()[:70]))
+
+
+# E5: names that only exist on the author's machine. The generic shapes live
+# here: private fix-log ids and the author's hook directory. The actual private
+# names would leak by being listed, so they stay outside the repo: one regex per
+# line in $GENIE_PRIVATE_MARKERS (default ~/.genie/private-markers). No file, no
+# extra check. `fixindex find` (detected only if installed) carries no id.
+AUTHOR_LOCAL_GENERIC = [r"\bfix(?:index)?\s+\d{4,5}\b", r"\bfix\s+\d{4}/\d{4}\b",
+                        r"\b\d{4,5}#\d+\b", r"~/\.claude/hooks/"]
+
+
+def author_local_pattern():
+    path = os.path.expanduser(os.environ.get("GENIE_PRIVATE_MARKERS", "~/.genie/private-markers"))
+    pats = list(AUTHOR_LOCAL_GENERIC)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            pats += [l.strip() for l in fh if l.strip() and not l.startswith("#")]
+    except OSError:
+        pass
+    return re.compile("|".join(pats), re.IGNORECASE)
+
+
+def test_no_author_local_markers(fails):
+    pat = author_local_pattern()
+    for f in tracked_files():
+        for i, line in enumerate(read(f).splitlines(), 1):
+            m = pat.search(line)
+            if m:
+                fails.append("E5: %s:%d names something only the author has (%r). "
+                             "Move it to the author's own rule files or drop it."
+                             % (rel(f), i, m.group(0)))
 
 
 def test_no_retired_wheel_names(fails):
@@ -264,7 +297,7 @@ def main():
             print("  " + f)
         sys.exit(1)
     print("PASS  %d files checked: size budget, no hardcoded home paths, hooks resolve, "
-          "python/shell parse, skills wellformed, no drift (D1 D2 E4 A5 C1)" % len(tracked_files()))
+          "python/shell parse, skills wellformed, no author-local names, no drift (D1 D2 E4 E5 A5 C1)" % len(tracked_files()))
 
 
 if __name__ == "__main__":

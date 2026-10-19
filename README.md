@@ -243,7 +243,7 @@ opencode/                              genie-dedup.js
 - **重複工具偵測有盲點**：不讀 plugin 內建 hook 的內容，名稱看不出用途的 plugin 偵測不到。
 - **沒附 Codex plugin manifest**：Codex 走 `install.sh`。
 - **刻意沒做**：對話狀態、訓練分類器、多語系 UI、專案層級 prefs。
-- 完整失效模式清單見 `PREMORTEM.md`（30 條）。
+- 完整失效模式清單見 `PREMORTEM.md`。
 
 ### License
 
@@ -490,7 +490,7 @@ opencode/                              genie-dedup.js
 - **Overlap detection has a blind spot**: it doesn't read hooks shipped inside plugins; a plugin whose name hides its role is not detected.
 - **No Codex plugin manifest**: Codex installs via `install.sh`.
 - **Deliberately not done**: conversation state, a trained classifier, multi-language UI, project-level prefs.
-- Full failure-mode list: `PREMORTEM.md` (30 entries).
+- Full failure-mode list: `PREMORTEM.md`.
 
 ### License
 

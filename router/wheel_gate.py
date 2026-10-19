@@ -3,11 +3,11 @@
 art, block the first new file and the plan hand-off until the wheel skill ran.
 
 Why a hook and not a rule: wheel-first lived only in the router's `DO:` line,
-which is emitted at conf=high. On this machine's route.log that was 49 of the
+which is emitted at conf=high. In one measured route.log that was 49 of the
 last 300 turns, and `build_request` at conf=high was 0 of them -- so the rule
 read as written and never fired. A rule the model can skip is not a gate.
-Same shape as a lookup gate: a flag file the router sets, cleared by the lookup itself
-rather than by a claim that it happened.
+Shape: a flag file the router sets, cleared by the lookup itself rather than
+by a claim that it happened.
 
 Two gated tools, for the two things wheel exists to catch:
   Write of a file that does not exist yet -> about to build.

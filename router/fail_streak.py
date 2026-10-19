@@ -2,7 +2,7 @@
 """Genie Fail Streak — Claude Code `PostToolUse` / `PostToolUseFailure` hook:
 track consecutive failures of the same command fingerprint and warn once at 2.
 
-Events (official): Bash failure only emits `PostToolUseFailure`
+Events (official Claude Code hook docs): Bash failure only emits `PostToolUseFailure`
 with `error` string (often starts with `Exit code N`), **no** `tool_response`.
 Success only emits `PostToolUse`. The two are mutually exclusive.
 

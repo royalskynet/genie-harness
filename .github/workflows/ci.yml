@@ -42,7 +42,7 @@ jobs:
             python "$t"
           done
       - name: opencode tests
-        run: node --test opencode/
+        run: node --test opencode/*.test.mjs
 
   gitleaks:
     runs-on: ubuntu-latest

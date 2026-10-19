@@ -1,6 +1,6 @@
 # Genie Harness
 
-> `## 繁體中文` · `## English`
+> [繁體中文](#繁體中文) · [English](#english)
 
 ---
 
@@ -36,7 +36,10 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main &&
 ```
 
 - **需要**：Python 3.9+、numpy。
-- **第一次**：背景下載意圖模型到 `~/.genie/model`，約 512 MB，處理後留 35 MB，幾分鐘。下載完前一樣能用，由模型自己判斷意圖。
+- **意圖模型**：約 512 MB，處理後留 35 MB，下載一次要幾分鐘。
+  - **Claude Code**：第一次開 session 時在背景下載到 `~/.genie/model`。下載完前一樣能用，由模型自己判斷意圖。
+  - **Codex**：`install.sh` 安裝時當場下載到 repo 裡的 `router/model`，下載完才裝完。
+- **wheel（找輪子）**：Genie 的 `$wheel` 用的是另一個 repo [`royalskynet/wheel-it`](https://github.com/royalskynet/wheel-it)。Codex 要先 `git clone https://github.com/royalskynet/wheel-it ~/dev/wheel` 再裝；沒有的話安裝器印 `skipping wheel` 照樣裝完，只是少了找輪子。Claude Code 用你使用者層的 `wheel` skill。
 - **平台**：macOS 實測可用。Linux、WSL 沒有實測。Windows 原生不支援（hook 是 sh 腳本）。
 - **numpy 裝不上**：Homebrew Python 出現 `externally-managed-environment` 時，跑 `python3 -m pip install --user --break-system-packages numpy`。
 
@@ -83,6 +86,7 @@ Genie 先在本地判斷你這句話是什麼意圖，再用一行 `DO:` 告訴�
 | 東西壞了（`fix_request`） | 先重現、讀錯誤訊息，修原因不修症狀，修完重跑貼真的輸出 |
 | 目標還不清楚（`ambiguous_request`） | 問一題選擇題 |
 | 在回你上一則（`continue`） | 接著做，不再問 |
+| 要更新 Genie 本身（`update_genie`） | 自己跑這台機器的更新指令，跑完提醒重開 |
 | 判斷不出來（`unsure`） | 不硬猜，模型自己讀訊息決定 |
 
 為什麼要路由：你不會打 `$wheel`，也不知道有這些 skill。只靠 skill 說明讓模型自己想起來，公開實測約五成會觸發。無頭 Claude Code 實測，DO 行寫成「第一個動作必須是」之後，要做東西的請求 7/7 次先跑 wheel（樣本小，不是 benchmark）。
@@ -159,10 +163,10 @@ Genie 先在本地判斷你這句話是什麼意圖，再用一行 `DO:` 告訴�
 
 重跑時保留第一次的 `*.bak-genie` 備份，既有備份不會被覆蓋。
 
-- **`~/.agents/skills/{genie-*,wheel}`**：4 個 symlink 指回本 repo 的 `skills/`；`wheel` 指到 `~/dev/wheel`（`royalskynet/wheel-it` 的 clone，`GENIE_WHEEL_UPSTREAM` 可改）。全新安裝時那個 clone 不存在，安裝器會以「refusing」停下，先 clone 再重跑。
+- **`~/.agents/skills/{genie-*,wheel}`**：4 個 symlink 指回本 repo 的 `skills/`；`wheel` 指到 `~/dev/wheel`（`royalskynet/wheel-it` 的 clone，`GENIE_WHEEL_UPSTREAM` 可改）。全新安裝時那個 clone 不存在，安裝器印 `skipping wheel` 後繼續；只有原本已有 `wheel` 連結、clone 卻不見時才以「refusing」停下，避免把能用的連結指到空處。
 - **`~/.codex/hooks.json`**：新增或更新 `UserPromptSubmit`（router）與 `PreToolUse`（guard），其他 hook 保留。復原：`mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json`。
 - **`~/.codex/config.toml`**：新增或更新 hook 的 `trusted_hash`。復原：`mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml`。
-- **`~/.codex/AGENTS.md`**：尾端加一次本專案的 AGENTS.md（marker 防重複）。復原：`mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md`。
+- **`~/.codex/AGENTS.md`**：只管 `<!-- genie-harness -->` 標記內的區塊，每次安裝或更新都換成最新版；標記外你自己寫的內容不動。復原：`mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md`。
 
 安裝完跑三個 smoke test 才宣告完成：閘門要擋下 `rm -rf /`、router 要吐出 intent、問「什麼是 X」時要強制打開 `terms`。
 
@@ -246,7 +250,7 @@ opencode/                              genie-dedup.js
 - **重複工具偵測有盲點**：不讀 plugin 內建 hook 的內容，名稱看不出用途的 plugin 偵測不到。
 - **沒附 Codex plugin manifest**：Codex 走 `install.sh`。
 - **刻意沒做**：對話狀態、訓練分類器、多語系 UI、專案層級 prefs。
-- 完整失效模式清單見 `PREMORTEM.md`。
+- 完整失效模式清單見 [`PREMORTEM.md`](PREMORTEM.md)。
 
 ### License
 
@@ -286,7 +290,10 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main &&
 ```
 
 - **Needs**: Python 3.9+, numpy.
-- **First run**: downloads the intent model to `~/.genie/model` in the background (~512 MB → 35 MB, a few minutes). Until then it still works; the model judges intent itself.
+- **Intent model**: ~512 MB, 35 MB after processing, a few minutes to download once.
+  - **Claude Code**: downloaded in the background to `~/.genie/model` on the first session. Until then it still works; the model judges intent itself.
+  - **Codex**: `install.sh` downloads it on the spot into the repo's `router/model`; install finishes after the download.
+- **wheel (prior-art search)**: Genie's `$wheel` lives in a separate repo, [`royalskynet/wheel-it`](https://github.com/royalskynet/wheel-it). On Codex, `git clone https://github.com/royalskynet/wheel-it ~/dev/wheel` before installing; without it the installer prints `skipping wheel` and finishes, minus prior-art search. Claude Code uses your user-level `wheel` skill.
 - **Platforms**: tested on macOS. Linux and WSL untested. Native Windows unsupported (hooks are sh scripts).
 - **numpy won't install**: on Homebrew Python with `externally-managed-environment`, run `python3 -m pip install --user --break-system-packages numpy`.
 
@@ -333,6 +340,7 @@ Genie classifies your message locally, then tells the model what to do in one `D
 | Something broke (`fix_request`) | Reproduce, read the error, fix the cause not the symptom, rerun and paste real output |
 | Goal still unclear (`ambiguous_request`) | Ask one pick-list question |
 | Replying to the last message (`continue`) | Carry on, don't re-ask |
+| Updating Genie itself (`update_genie`) | Runs this host's update command, then reminds you to restart |
 | Router can't tell (`unsure`) | No guessing; the model reads the message and decides |
 
 Why a router: you won't type `$wheel` and don't know the skills exist. Relying on skill descriptions alone activates them about half the time in public measurements. In headless Claude Code runs, once the DO line said "FIRST action ... MUST", build requests ran wheel first 7/7 times (small sample, not a benchmark).
@@ -409,10 +417,10 @@ Four skills appear as `genie-harness:<name>`; `wheel` lives outside this repo (`
 
 Re-runs keep the first `*.bak-genie` backup; an existing backup is never overwritten.
 
-- **`~/.agents/skills/{genie-*,wheel}`**: 4 symlinks to this repo's `skills/`; `wheel` points at `~/dev/wheel` (a clone of `royalskynet/wheel-it`, override with `GENIE_WHEEL_UPSTREAM`). On a fresh install without that clone, the installer stops with "refusing"; clone it and re-run.
+- **`~/.agents/skills/{genie-*,wheel}`**: 4 symlinks to this repo's `skills/`; `wheel` points at `~/dev/wheel` (a clone of `royalskynet/wheel-it`, override with `GENIE_WHEEL_UPSTREAM`). On a fresh install without that clone, the installer prints `skipping wheel` and continues. It stops with "refusing" only when a `wheel` link already exists but its clone is gone, so a working link is never pointed at nothing.
 - **`~/.codex/hooks.json`**: adds or refreshes `UserPromptSubmit` (router) and `PreToolUse` (guard); other hooks are kept. Restore: `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json`.
 - **`~/.codex/config.toml`**: adds or refreshes the hooks' `trusted_hash`. Restore: `mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml`.
-- **`~/.codex/AGENTS.md`**: appends this repo's AGENTS.md once (marker-guarded). Restore: `mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md`.
+- **`~/.codex/AGENTS.md`**: owns only the block inside the `<!-- genie-harness -->` marker and replaces it with the latest on every install or update; your text outside the marker is left alone. Restore: `mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md`.
 
 Three smoke tests run before install declares done: the guard must deny `rm -rf /`, the router must emit an intent, and asking "what is X" must force `terms` on.
 
@@ -496,7 +504,7 @@ opencode/                              genie-dedup.js
 - **Overlap detection has a blind spot**: it doesn't read hooks shipped inside plugins; a plugin whose name hides its role is not detected.
 - **No Codex plugin manifest**: Codex installs via `install.sh`.
 - **Deliberately not done**: conversation state, a trained classifier, multi-language UI, project-level prefs.
-- Full failure-mode list: `PREMORTEM.md`.
+- Full failure-mode list: [`PREMORTEM.md`](PREMORTEM.md).
 
 ### License
 

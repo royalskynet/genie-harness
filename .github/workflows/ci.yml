@@ -20,6 +20,8 @@ jobs:
         with:
           node-version: "22"
       - run: python -m pip install numpy
+      # test_repo.py checks rules shared with the wheel skill, which lives upstream.
+      - run: git clone --depth 1 https://github.com/royalskynet/wheel-it "$HOME/dev/wheel"
 
       # test_router.py needs the intent model; download once, then reuse.
       - uses: actions/cache@v6

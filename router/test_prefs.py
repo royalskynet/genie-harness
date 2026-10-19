@@ -301,7 +301,7 @@ def test_companions_suggested_once_never_installed(fails):
             eq("Do not install it yourself" in ctx, True, "never auto-install", fails)
             ctx = prefs.render_context(prefs.resolve("hi", path=p, persist=False,
                                                      found={"style": ["ponytail"]}))
-            eq("OPTIONAL" in ctx, False, "present -> silent", fails)
+            eq("not installed: ponytail" in ctx, False, "present -> silent", fails)
             prefs.save({"level": "beginner"}, p)
             ctx = prefs.render_context(prefs.resolve("hi", path=p, found={}, persist=False))
             eq("OPTIONAL" in ctx, False, "not first run -> silent", fails)
@@ -581,13 +581,23 @@ def test_duplicate_wheel_and_registry(fails):
         # Genie links skills/wheel to royalskynet/wheel-it (no copy in the
         # repo): a link to the upstream SKILL.md is the same skill, so it must
         # not be reported as a drifting copy.
-        upstream = overlap.wheel_upstream()
-        eq(os.path.isfile(upstream), True, "the wheel upstream resolves", fails)
-        with tempfile.TemporaryDirectory() as sk2:
-            os.symlink(os.path.realpath(os.path.dirname(upstream)),
-                       os.path.join(sk2, "wheel"))
-            eq([k for k, _ in overlap.duplicates([sk2]) if k.startswith("dup:skill:")], [],
-               "a link to the same SKILL.md is the same skill, not a copy", fails)
+        # A fake clone keeps this independent of the machine's ~/dev/wheel.
+        old_up = os.environ.get("GENIE_WHEEL_UPSTREAM")
+        with tempfile.TemporaryDirectory() as up, tempfile.TemporaryDirectory() as sk2:
+            os.environ["GENIE_WHEEL_UPSTREAM"] = up
+            try:
+                upstream = overlap.wheel_upstream()
+                eq(upstream, os.path.join(up, "skills", "wheel", "SKILL.md"),
+                   "GENIE_WHEEL_UPSTREAM picks the clone", fails)
+                os.makedirs(os.path.dirname(upstream))
+                with open(upstream, "w") as f:
+                    f.write("---\nname: wheel\n---\nupstream\n")
+                os.symlink(os.path.realpath(os.path.dirname(upstream)),
+                           os.path.join(sk2, "wheel"))
+                eq([k for k, _ in overlap.duplicates([sk2]) if k.startswith("dup:skill:")], [],
+                   "a link to the same SKILL.md is the same skill, not a copy", fails)
+            finally:
+                os.environ.pop("GENIE_WHEEL_UPSTREAM", None) if old_up is None else os.environ.__setitem__("GENIE_WHEEL_UPSTREAM", old_up)
 
 
 def test_hook_shape_and_fail_open(fails):

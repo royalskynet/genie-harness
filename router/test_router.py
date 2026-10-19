@@ -65,6 +65,13 @@ CASES = [
     ("什麼是 API", "teach_me"),
     ("react 還是 vue", "research_needed"),
     ("幫我看看這個錯誤", "clear_request"),
+    # "update Genie" is one known command, not research (2026-10-19: was research_needed)
+    ("幫我更新精靈到最新", "update_genie"),
+    ("更新 Genie", "update_genie"),
+    ("幫我把 genie 升級到最新版", "update_genie"),
+    ("update genie to latest", "update_genie"),
+    ("genie 更新後壞了", "fix_request"),
+    ("幫我更新 README", "clear_request"),
 ]
 
 
@@ -164,6 +171,19 @@ def test_dispatch(fails):
             out = r.dispatch(intent, res, "claude")
             if "{" in out or re.search(r"MUST be (?![$\w])", out):
                 fails.append("dispatch %s: unfilled placeholder: %r" % (intent, out))
+
+
+def test_update_genie_runs_the_real_command(fails):
+    """The DO line must carry a command that works on this host: Codex runs the
+    latest update.sh from its own checkout (an old local copy cannot cross a
+    rewritten history); Claude Code goes through the plugin manager."""
+    codex = r.dispatch("update_genie", {}, "codex")
+    repo = os.path.dirname(HERE)
+    if "show FETCH_HEAD:update.sh" not in codex or repo not in codex or "pull --ff-only" in codex:
+        fails.append("update_genie codex: wrong command: %r" % codex)
+    claude = r.dispatch("update_genie", {}, "claude")
+    if "claude plugin update genie-harness@genie-harness" not in claude or "Claude Code" not in claude:
+        fails.append("update_genie claude: wrong command: %r" % claude)
 
 
 def test_options_are_not_padded(fails):
@@ -699,6 +719,7 @@ def main():
     if r.rx.load_config("claude") is not None:
         fails.append("route_ext: tests can see a live route_ext config (set GENIE_ROUTE_EXT=0)")
     test_dispatch(fails)
+    test_update_genie_runs_the_real_command(fails)
     test_options_are_not_padded(fails)
     test_local_tools_follow_level(fails)
     test_abstain_is_silent(fails)

@@ -42,6 +42,8 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main &&
 
 ### 更新
 
+**最簡單**：直接跟 Codex 或 Claude Code 說「幫我更新 Genie」或「更新精靈到最新」，它會自己跑下面的指令。
+
 Codex：**再跑一次上面安裝那一行**，它會先抓最新版的 `update.sh` 再更新。上游歷史在 2026-10-19 改寫過一次，舊安裝的 `git pull` 會失敗，這一行會處理：本地沒改動就對齊最新版，舊版留在 `genie-before-update-*` 分支；有改動就停下來不動。
 
 ```bash
@@ -289,6 +291,8 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main &&
 - **numpy won't install**: on Homebrew Python with `externally-managed-environment`, run `python3 -m pip install --user --break-system-packages numpy`.
 
 ### Update
+
+**Easiest**: tell Codex or Claude Code "update Genie" (or "upgrade genie to latest"). It runs the commands below itself.
 
 Codex: **re-run the install line above**. It fetches the latest `update.sh` first. Upstream history was rewritten once (2026-10-19), so `git pull` fails on old installs; this line handles it: with no local edits it moves to the latest version and keeps the old one on a `genie-before-update-*` branch; with local edits it stops and changes nothing.
 

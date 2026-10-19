@@ -85,6 +85,7 @@ Genie 常駐做五件事，每件都會偵測本機有沒有別的工具在做�
 | `fix_request` | 壞了或在報錯。**先重現、讀懂錯誤訊息，修原因不修症狀，修完重跑貼真的輸出** |
 | `ambiguous_request` | 還沒有目標；問一題，有目標後一樣先跑 wheel |
 | `continue` | 在回答你上一則（「好」「第二個」）——接著做，不要再問 |
+| `update_genie` | 要把 Genie（中文常叫「精靈」）本身更新到最新。**照 `DO:` 附的指令自己跑**，跑完說重開才生效。沒有 `DO:` 時：Codex 跑 README「更新」段那一行，Claude Code 跑 `claude plugin marketplace update genie-harness && claude plugin update genie-harness@genie-harness` |
 
 標籤可能分錯：`DO:` 跟對話明顯矛盾時，以上下文為準，照 `DO:` 的精神做。
 

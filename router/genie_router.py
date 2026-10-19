@@ -32,6 +32,7 @@ Hook: `genie_router.py [--host codex|claude]` with the hook JSON on stdin.
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -144,6 +145,15 @@ except Exception:
     rx = None
 
 
+# "Update Genie" names one exact command, so it is not a research or build turn.
+# 精靈 is what Chinese-speaking users call Genie. Verb first, or Genie then verb
+# then "latest": "genie 更新後壞了" is a fix, not an update request.
+SELF_UPDATE = re.compile(
+    r"(?:更新|升級|升级|update|upgrade)\s*(?:一下\s*)?(?:the\s+)?(?:genie|精靈|精灵)"
+    r"|(?:genie|精靈|精灵)\s*(?:要|可以)?\s*(?:更新|升級|升级|update|upgrade)\s*(?:到|to)?\s*"
+    r"(?:最新|latest)", re.I)
+
+
 def regex_tier(text):
     low = text.lower()
     # Asking for other people's solutions is research at any length; only a
@@ -151,6 +161,8 @@ def regex_tier(text):
     for kw in INTENTS["intents"]["risky_action"].get("keywords", []):
         if re.search(kw, low):
             return "risky_action", "regex:" + kw
+    if SELF_UPDATE.search(low):
+        return "update_genie", "regex:self-update"
     for kw in INTENTS.get("wheel_sure", []):
         if re.search(kw, low):
             return "research_needed", "regex-wheel:" + kw
@@ -417,6 +429,10 @@ DO = {
                          "camera). Once the goal is clear, run {wheel} before proposing how.",
     "continue": "they are answering your last message (a yes or a pick). Carry on with that "
                 "plan; do not ask again.",
+    "update_genie": "they want Genie (精靈) itself updated to the latest version. Run this "
+                    "yourself now, do not hand it to them: `{update}`. Paste the last lines "
+                    "of its real output. Then say in one sentence that it takes effect after "
+                    "restarting {host_name}, and that their settings in ~/.genie are kept.",
     # No entry for UNSURE on purpose: hook() returns prefs only and never calls
     # dispatch() for it. See the module docstring.
     # model missing (e.g. still downloading): the label is a placeholder, so
@@ -495,6 +511,22 @@ WHEEL_HINT = ("WHEEL (low confidence, not an order): this may be a build-or-choo
               "If it is, run %s before you design or decide. If it is not, ignore this line.")
 
 
+HOST_NAME = {"codex": "Codex", "claude": "Claude Code"}
+
+
+def update_cmd(host):
+    """The update command for this install. Codex runs the router from its own
+    checkout, so the parent of HERE is the directory to update. The latest
+    update.sh is fetched and run, never the local copy: an old copy cannot
+    cross a rewritten history (README, Update)."""
+    if host == "claude":
+        return ("claude plugin marketplace update genie-harness && "
+                "claude plugin update genie-harness@genie-harness")
+    d = shlex.quote(os.path.dirname(HERE))
+    return ("git -C %s fetch -q origin main && bash <(git -C %s show FETCH_HEAD:update.sh) %s"
+            % (d, d, d))
+
+
 def dispatch(intent, res, host="codex"):
     """-> the `DO:` line. `res` is prefs.resolve(); research off or handed to
     another tool changes who looks for prior art, never whether we ask first."""
@@ -516,7 +548,9 @@ def dispatch(intent, res, host="codex"):
         if blocks.get("examples") == "off":
             do = do.replace("use {genie-explain}", "answer directly, no examples or analogies")
     names = ("genie-execute", "genie-explain", "genie-terms")
-    line = "DO: " + do.format(wheel=wheel, **{n: ref % n for n in names})
+    line = "DO: " + do.format(wheel=wheel, update=update_cmd(host),
+                              host_name=HOST_NAME.get(host, host),
+                              **{n: ref % n for n in names})
     # The user's own fix log knows this machine's past breakages; ask it before the web.
     if intent == "fix_request" and shutil.which("fixindex"):
         line += FIXINDEX_FIRST

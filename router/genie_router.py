@@ -402,8 +402,11 @@ DO = {
     "clear_request": "just do it, run it, then say in one line what changed.",
     "teach_me": "use {genie-explain} ({genie-terms} for the one key term); end by checking "
                 "they understood.",
-    "user_confused": "use {genie-explain}: shorter, fewer terms, one analogy at their level; "
-                     "stay at that level for the rest of the conversation.",
+    "user_confused": "use {genie-explain}: find the one point they are stuck on and "
+                     "re-explain only that, in plain words, every term glossed; one "
+                     "analogy at their level, at most 3 sentences; end by asking which "
+                     "part is still unclear. Stay at that level for the rest of the "
+                     "conversation.",
     "risky_action": "say in one plain sentence what this does and whether it can be undone, "
                     "then wait for a yes.",
     "ambiguous_request": "their goal is not clear yet. Never answer only that you cannot. "

@@ -359,6 +359,23 @@ def test_blocks_cannot_disable_enforcement(fails):
             fails.append("an enforcement-ish name leaked into BLOCKS: %r" % (prefs.BLOCKS,))
 
 
+def test_humanize_and_beginner_register(fails):
+    """humanize is on at every level; beginner glosses every term in 3-5 sentences;
+    every analogy-using level caps the analogy at 3 sentences."""
+    for lvl in prefs.LEVELS:
+        if prefs.LEVEL_DEFAULTS[lvl]["humanize"] != "on":
+            fails.append("humanize default is not on at level %s" % lvl)
+    beg = prefs.REGISTER["beginner"]
+    for must in ("never used a computer", "gloss every technical word", "3-5 sentences"):
+        if must not in beg:
+            fails.append("beginner register lost %r" % must)
+    for lvl in ("beginner", "intermediate", "advanced"):
+        if "within 3 sentences" not in prefs.REGISTER[lvl]:
+            fails.append("%s register has no 3-sentence analogy cap" % lvl)
+    if "analogy" in prefs.REGISTER["expert"].replace("none;", ""):
+        fails.append("expert register should not ask for analogies")
+
+
 def test_guard_handoff_needs_a_real_guard(fails):
     """Handing the guard to another tool must not be a way to have no guard.
 

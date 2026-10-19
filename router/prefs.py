@@ -54,6 +54,9 @@ STATES = ("on", "auto", "off")
 # Defaults per level. Only consulted for blocks the user has not pinned.
 # `research` is on at every level: knowing how others already solved it is worth
 # a look even for an expert. Off only when the user says so (`!research off`).
+# `humanize` is on at every level too: plain, one-reading sentences cost an expert
+# nothing, and switching them off by level made advanced/expert answers read like
+# a spec. Off only when the user says so (`!humanize off`).
 LEVEL_DEFAULTS = {
     "beginner": {
         "terms": "on", "examples": "on", "steps": "on",
@@ -65,11 +68,11 @@ LEVEL_DEFAULTS = {
     },
     "advanced": {
         "terms": "off", "examples": "auto", "steps": "off",
-        "research": "on", "confirm": "on", "humanize": "off",
+        "research": "on", "confirm": "on", "humanize": "on",
     },
     "expert": {
         "terms": "off", "examples": "off", "steps": "off",
-        "research": "on", "confirm": "on", "humanize": "off",
+        "research": "on", "confirm": "on", "humanize": "on",
     },
 }
 
@@ -77,12 +80,19 @@ LEVEL_DEFAULTS = {
 # where the analogy comes from. Concrete table per term: $genie-explain.
 # Only the analogy source is injected: what each block *does* is in AGENTS.md,
 # so repeating it here spent a paragraph per turn to say nothing new.
+# An analogy longer than 3 sentences becomes a second thing to understand.
+ANALOGY_CAP = "; an analogy stays within 3 sentences"
 REGISTER = {
-    "beginner": "daily life (kitchen, post office, game saves)",
+    # Beginner assumes no computer experience at all: every technical word gets a
+    # short gloss the first time, and the whole explanation stays at 3-5 sentences
+    # -- annotating everything is only kind if it stays short.
+    "beginner": "assume they have never used a computer; daily life (kitchen, post "
+                "office, game saves); gloss every technical word in a few plain words "
+                "the first time it appears; explain in 3-5 sentences" + ANALOGY_CAP,
     "intermediate": "tools they already use (spreadsheets, folders, browser tabs); "
-                    "name the real term once",
+                    "name the real term once" + ANALOGY_CAP,
     "advanced": "adjacent technical ideas (an index, a queue, a lockfile); "
-                "real terms freely",
+                "real terms freely" + ANALOGY_CAP,
     "expert": "none; precise terms, the mechanism, the trade-off, a source link",
 }
 

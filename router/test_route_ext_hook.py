@@ -18,6 +18,9 @@ sys.path.insert(0, HERE)
 # Cases without their own GENIE_ROUTE_EXT must not fall back to the developer's
 # real config (its escalate_cmd is a paid judge); run_hook restores to this value.
 os.environ.setdefault("GENIE_ROUTE_EXT", "0")
+# The wheel gate and the long-session mark write per-session flags; a test run
+# must not leave them in the developer's ~/.genie/state (found: wheel-test-session).
+os.environ.setdefault("GENIE_STATE_DIR", tempfile.mkdtemp(prefix="genie-state-test-"))
 import genie_router as gr
 
 

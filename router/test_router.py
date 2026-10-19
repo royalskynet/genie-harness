@@ -33,6 +33,9 @@ os.environ.setdefault("GENIE_PREFS", os.path.join(tempfile.mkdtemp(prefix="genie
 # Same leak for the developer's ~/.genie/route_ext.json: its escalate_cmd is a live
 # (paid) judge, and every grey-band fixture below would call it once per run.
 os.environ.setdefault("GENIE_ROUTE_EXT", "0")
+# The wheel gate and the long-session mark write per-session flags; a test run
+# must not leave them in the developer's ~/.genie/state (found: wheel-test-session).
+os.environ.setdefault("GENIE_STATE_DIR", tempfile.mkdtemp(prefix="genie-state-test-"))
 import genie_router as r  # noqa: E402
 
 CASES = [
@@ -51,6 +54,9 @@ CASES = [
     ("在 app.py 第 10 行加一個 print", "clear_request"),
     ("現在做手機 app 大家都用什麼", "research_needed"),
     ("這段話我完全跟不上", "user_confused"),
+    ("講人話", "user_confused"),
+    ("可以用人話再說一次嗎", "user_confused"),
+    ("say that again in plain words", "user_confused"),
     ("I have no idea what you just said", "user_confused"),
     ("add a button that says hello", "clear_request"),
     ("can you make this faster somehow", "ambiguous_request"),

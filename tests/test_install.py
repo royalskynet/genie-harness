@@ -238,7 +238,7 @@ class InstallerTest(unittest.TestCase):
         home.mkdir()
         codex.mkdir()
         git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
-        subprocess.run([*git, "init", "-q", str(origin)], check=True)
+        subprocess.run([*git, "init", "-q", "-b", "main", str(origin)], check=True)
         subprocess.run([*git, "-C", str(origin), "add", "-A"], check=True)
         subprocess.run([*git, "-C", str(origin), "commit", "-qm", "v1"], check=True)
         clone = self.root / "clone" / "genie-harness"

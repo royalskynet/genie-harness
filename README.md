@@ -32,7 +32,7 @@
 **Codex**（一行，可重複執行；已裝過就改成更新）：
 
 ```bash
-d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else git clone https://github.com/royalskynet/genie-harness "$d"; fi && bash "$d/install.sh"
+d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main && bash <(git -C "$d" show FETCH_HEAD:update.sh) "$d"; else git clone https://github.com/royalskynet/genie-harness "$d" && bash "$d/install.sh"; fi
 ```
 
 - **需要**：Python 3.9+、numpy。
@@ -42,8 +42,9 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else gi
 
 ### 更新
 
+Codex：**再跑一次上面安裝那一行**，它會先抓最新版的 `update.sh` 再更新。上游歷史在 2026-10-19 改寫過一次，舊安裝的 `git pull` 會失敗，這一行會處理：本地沒改動就對齊最新版，舊版留在 `genie-before-update-*` 分支；有改動就停下來不動。
+
 ```bash
-bash ~/genie-harness/update.sh                                                                     # Codex
 claude plugin marketplace update genie-harness && claude plugin update genie-harness@genie-harness   # Claude Code
 ```
 
@@ -279,7 +280,7 @@ You type  →  Intent router (0.03–0.12s, ≤63 MB RAM)  →  Codex / Claude C
 **Codex** (one line, safe to re-run; updates if already installed):
 
 ```bash
-d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else git clone https://github.com/royalskynet/genie-harness "$d"; fi && bash "$d/install.sh"
+d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main && bash <(git -C "$d" show FETCH_HEAD:update.sh) "$d"; else git clone https://github.com/royalskynet/genie-harness "$d" && bash "$d/install.sh"; fi
 ```
 
 - **Needs**: Python 3.9+, numpy.
@@ -289,8 +290,9 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" pull --ff-only; else gi
 
 ### Update
 
+Codex: **re-run the install line above**. It fetches the latest `update.sh` first. Upstream history was rewritten once (2026-10-19), so `git pull` fails on old installs; this line handles it: with no local edits it moves to the latest version and keeps the old one on a `genie-before-update-*` branch; with local edits it stops and changes nothing.
+
 ```bash
-bash ~/genie-harness/update.sh                                                                     # Codex
 claude plugin marketplace update genie-harness && claude plugin update genie-harness@genie-harness   # Claude Code
 ```
 

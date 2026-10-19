@@ -474,6 +474,24 @@ NOT_USER_TURN = re.compile(
     r"|\[(?:Artifact comment sent to Claude|Request interrupted)\b)", re.I)
 
 
+def wheel_ref(res, host):
+    """Who looks for prior art this turn, or "" when nobody does."""
+    handed = res.get("handed_off", {})
+    if handed.get("research"):
+        return "%s (the user's prior-art tool)" % handed["research"]
+    if res.get("blocks", {}).get("research") == "off":
+        return ""
+    return WHEEL_REF.get(host, WHEEL_REF["codex"])
+
+
+# conf=low on a wheel intent is a guess, so it gets a hint instead of an order
+# and never arms the gate. It exists because the guess is nearly all of them:
+# in 300 logged turns build_request was conf=high 0 times and conf=low 2 times,
+# which left the whole wheel-first rule unsaid on the turns that needed it.
+WHEEL_HINT = ("WHEEL (low confidence, not an order): this may be a build-or-choose turn. "
+              "If it is, run %s before you design or decide. If it is not, ignore this line.")
+
+
 def dispatch(intent, res, host="codex"):
     """-> the `DO:` line. `res` is prefs.resolve(); research off or handed to
     another tool changes who looks for prior art, never whether we ask first."""
@@ -484,13 +502,9 @@ def dispatch(intent, res, host="codex"):
     if intent not in WHEEL_INTENTS + ("risky_action", "continue") and \
             blocks.get("research") == "on" and "research" in res.get("turn_overrides", {}):
         do = DO["build_request"]
-    if handed.get("research"):
-        wheel = "%s (the user's prior-art tool)" % handed["research"]
-    elif blocks.get("research") == "off":
-        wheel = ""
+    wheel = wheel_ref(res, host)
+    if not wheel:
         do = DO_NO_WHEEL.get(intent, do)
-    else:
-        wheel = WHEEL_REF.get(host, WHEEL_REF["codex"])
     # A DO line that names a block the user switched off is an order the model
     # has to disobey; it learns to skip DO lines. Name only what is on.
     if intent == "teach_me":
@@ -580,6 +594,27 @@ def route_ext(data, text, host, intent, conf):
     return lines, ext
 
 
+def arm_wheel_gate(data, intent, order, ext_log, res, host):
+    """Open the wheel gate when this turn must not build before it searches.
+
+    Only on an order (conf=high wheel intent) or an L2 route -- a guess must not
+    deny a tool call. The gate itself lives in wheel_gate.py; this is the only
+    place that opens it, so research=off or handed to another tool means no gate.
+    Fails open: a missing or broken gate module is one less reminder, not an error.
+    """
+    try:
+        if not wheel_ref(res, host):
+            return
+        tier = (ext_log or {}).get("tier")
+        if not ((order and intent in WHEEL_INTENTS) or tier == "L2"):
+            return
+        sys.path.insert(0, HERE)
+        import wheel_gate
+        wheel_gate.open_gate(data.get("session_id"))
+    except Exception as e:
+        sys.stderr.write("genie-router: wheel gate not armed (%s)\n" % e)
+
+
 def hook(raw, host="codex"):
     """UserPromptSubmit: tag + DO + prefs, or prefs alone when the router
     abstains, or nothing at all when the turn is not the user talking.
@@ -641,6 +676,11 @@ def hook(raw, host="codex"):
         res = prefs.resolve(text)
         if order:
             lines.append(dispatch("degraded" if degraded else intent, res, host))
+        arm_wheel_gate(data, intent, order, ext_log, res, host)
+        if not order and not abstain and intent in WHEEL_INTENTS:
+            ref = wheel_ref(res, host)
+            if ref:
+                lines.append(WHEEL_HINT % ref)
         # Claude gets the static prefs once from SessionStart; Codex has no such hook.
         ctx = prefs.render_context(res, host, "turn" if host == "claude" else "all")
         if ctx:

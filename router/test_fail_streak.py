@@ -122,10 +122,23 @@ def main():
         if p14.returncode != 0 or p14.stdout.strip() or p14.stderr.strip():
             fails.append("FAIL 6: bad JSON should fail open (rc=0, no output)")
 
-        # 7. Non-Bash ignored
+        # 7. A tool call with no target at all is ignored (no command, no path)
         p15 = run(json.dumps({"hook_event_name": "PostToolUseFailure", "tool_name": "Write", "session_id": "s5"}), state_dir=tmp)
         if p15.returncode != 0 or p15.stdout.strip():
-            fails.append("FAIL 7: non-Bash tool should be ignored")
+            fails.append("FAIL 7: a call with no fingerprint should be ignored")
+
+        # 7b. The loop that actually happens: the same Edit failing twice. The
+        # file is the fingerprint, so a different file must not accumulate.
+        def edit(path, session_id="s6", event="PostToolUseFailure"):
+            return run(json.dumps({"hook_event_name": event, "tool_name": "Edit",
+                                   "session_id": session_id, "error": "String to replace not found",
+                                   "tool_input": {"file_path": path}}), state_dir=tmp)
+        if has_warning(edit("/tmp/a.py").stdout):
+            fails.append("FAIL 7b-1: first Edit failure should not warn")
+        if has_warning(edit("/tmp/b.py").stdout):
+            fails.append("FAIL 7b-2: a different file should not accumulate")
+        if not has_warning(edit("/tmp/a.py").stdout):
+            fails.append("FAIL 7b-3: same file failing twice should warn")
 
     # 8. 7-day old files cleaned up
     with tempfile.TemporaryDirectory() as tmp:

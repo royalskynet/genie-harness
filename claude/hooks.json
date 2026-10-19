@@ -20,6 +20,12 @@
         "hooks": [
           { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/guard_dangerous.py\"", "timeout": 5 }
         ]
+      },
+      {
+        "matcher": "Write|ExitPlanMode|Skill|SlashCommand|Bash",
+        "hooks": [
+          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/wheel_gate.py\"", "timeout": 5 }
+        ]
       }
     ],
     "Stop": [
@@ -31,7 +37,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/fail_streak.py\"", "timeout": 5 }
         ]
@@ -39,7 +45,7 @@
     ],
     "PostToolUseFailure": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/fail_streak.py\"", "timeout": 5 }
         ]

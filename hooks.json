@@ -21,6 +21,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Write|ExitPlanMode|Skill|SlashCommand|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 __GENIE_DIR__/router/wheel_gate.py",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }

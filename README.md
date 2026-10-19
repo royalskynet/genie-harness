@@ -79,7 +79,7 @@ claude plugin marketplace update genie-harness && claude plugin update genie-har
 
 **跟其他套件撞功能：** Genie 是整個 agent 的 harness，不是專門的安全套件。另一個已裝工具也在做它的某件事時（`guard` 擋危險指令、`research` 找輪子、`style` 語氣詳略），安裝程式會列出來，下一則訊息問你一次交給誰，並附建議（`guard` 建議交給專門工具）。用 `!owner <事>=<genie|工具名>` 選。交出去的那件事 Genie 就不做；那個工具被移除，Genie 自動接回。之後才裝的工具也會被偵測、一樣問一次。
 
-**不是區塊，任何偏好設定都關不掉：** 災難指令閘門（`router/guard_dangerous.py`）、宿主的權限層（Codex 的 sandbox 與 approval、Claude Code 的權限確認）、以及「不確定就說不確定」。關掉提醒不等於關掉保護。git 方面還會對新手常踩、要看 repo 狀態才算危險的操作發警告（只警告不擋）：丟掉還沒 commit 的改動、刪 stash、`branch -D`、把 `.env`／金鑰檔加進 git、把 repo 設成公開。只有出現這類指令才跑 `git status`，工作區乾淨就不吵。另外會擋兩件弄不回來的事：不帶 label 的 `launchctl bootout gui/<uid>`（整台機器的背景程式一起停）、把憑證的**值**印進對話（`cat .env`、`printenv`、`echo $API_KEY`、用 Read 讀 `.env`）；只看變數名的 `cut -d= -f1 .env`、`test -n "$X"` 照常放行。唯一例外是把 `guard` 交給另一個**真的裝成 PreToolUse hook** 的指令守門工具；只改設定檔做不到。
+**不是區塊，任何偏好設定都關不掉：** 災難指令閘門（`router/guard_dangerous.py`）、宿主的權限層（Codex 的 sandbox 與 approval、Claude Code 的權限確認）、以及「不確定就說不確定」。**輪子閘**（`router/wheel_gate.py`）是半個例外：它跟著 `research` 區塊走，`research` 關了就沒有閘；開著的時候，判定要找現成方案的那一輪，第一個新檔和 ExitPlanMode（計畫定案）會被擋到跑過 wheel 為止——改既有檔和寫 `.md` 筆記不擋，同一個 session 擋第二次後自動放行，所以它卡不住你。關掉提醒不等於關掉保護。git 方面還會對新手常踩、要看 repo 狀態才算危險的操作發警告（只警告不擋）：丟掉還沒 commit 的改動、刪 stash、`branch -D`、把 `.env`／金鑰檔加進 git、把 repo 設成公開。只有出現這類指令才跑 `git status`，工作區乾淨就不吵。另外會擋兩件弄不回來的事：不帶 label 的 `launchctl bootout gui/<uid>`（整台機器的背景程式一起停）、把憑證的**值**印進對話（`cat .env`、`printenv`、`echo $API_KEY`、用 Read 讀 `.env`）；只看變數名的 `cut -d= -f1 .env`、`test -n "$X"` 照常放行。唯一例外是把 `guard` 交給另一個**真的裝成 PreToolUse hook** 的指令守門工具；只改設定檔做不到。
 
 ### Claude Code（plugin）
 
@@ -90,7 +90,7 @@ claude plugin marketplace update genie-harness && claude plugin update genie-har
 /plugin install genie-harness@genie-harness
 ```
 
-重開 Claude Code。plugin 會註冊六個 hook（SessionStart 載入 `AGENTS.md`、第一次時下載模型、跑自我檢查 `router/selftest.py`（正常時不出聲，閘門或 router 壞了才講一句）；UserPromptSubmit 跑意圖路由 `--host claude`，順便在使用者貼了金鑰時提醒別複述、session 超過 150 分鐘時提醒換新對話；PreToolUse 在 `Bash|Write|Edit|MultiEdit|NotebookEdit|Read` 上跑閘門；PostToolUse／PostToolUseFailure 跑 `router/fail_streak.py`，同一類指令連續失敗 2 次就叫它停下重讀錯誤；Stop 跑完成閘 `router/done_gate.py`），五個 skill 以 `genie-harness:<名稱>` 出現。完成閘只在 Claude Code 生效：改了 `.py`／`.js` 之類的程式檔、最後一次改完卻什麼都沒跑就停下時，它會擋一次，要你真的跑一次貼輸出（或說明為什麼跑不了）；`.md`／`.txt` 純文字改動不擋，Codex 端沒有這個 hook。**只看一眼的指令不算跑過**（`ls`／`cat`／`wc`／`git status` 之類）：改完檔跑個 `ls` 就過閘的話，這道閘等於不存在——不會失敗的證據不是證據。`grep`／`sed`／`awk`／`test` 照算，它們常常就是斷言本身。需要 Python 3.9+ 和 numpy。第一次開 session 會在背景把意圖模型下載到 `~/.genie/model`（只一次，~512 MB → 35 MB，幾分鐘）；下載完成前，router 會請模型自己判斷意圖，一樣先跑 wheel。缺 numpy 時，模型會被告知要主動提議幫他裝。偏好設定存在 `~/.genie/`，跟 Codex 共用。更新：`/plugin marketplace update genie-harness` 後 `/plugin update genie-harness@genie-harness`（或在 `/plugin` 介面點更新），重開 Claude Code 才生效。模型在 plugin 目錄外，更新不會重新下載。移除：`/plugin uninstall genie-harness`。
+重開 Claude Code。plugin 會註冊七個 hook（SessionStart 載入 `AGENTS.md`、第一次時下載模型、跑自我檢查 `router/selftest.py`（正常時不出聲，閘門或 router 壞了才講一句）；UserPromptSubmit 跑意圖路由 `--host claude`，順便在使用者貼了金鑰時提醒別複述、session 超過 150 分鐘時提醒換新對話；PreToolUse 在 `Bash|Write|Edit|MultiEdit|NotebookEdit|Read` 上跑閘門，另在 `Write|ExitPlanMode|Skill|SlashCommand|Bash` 上跑輪子閘 `router/wheel_gate.py`；PostToolUse／PostToolUseFailure 跑 `router/fail_streak.py`，同一類指令連續失敗 2 次就叫它停下重讀錯誤；Stop 跑完成閘 `router/done_gate.py`），五個 skill 以 `genie-harness:<名稱>` 出現。完成閘只在 Claude Code 生效：改了 `.py`／`.js` 之類的程式檔、最後一次改完卻什麼都沒跑就停下時，它會擋一次，要你真的跑一次貼輸出（或說明為什麼跑不了）；`.md`／`.txt` 純文字改動不擋，Codex 端沒有這個 hook。**只看一眼的指令不算跑過**（`ls`／`cat`／`wc`／`git status` 之類）：改完檔跑個 `ls` 就過閘的話，這道閘等於不存在——不會失敗的證據不是證據。`grep`／`sed`／`awk`／`test` 照算，它們常常就是斷言本身。需要 Python 3.9+ 和 numpy。第一次開 session 會在背景把意圖模型下載到 `~/.genie/model`（只一次，~512 MB → 35 MB，幾分鐘）；下載完成前，router 會請模型自己判斷意圖，一樣先跑 wheel。缺 numpy 時，模型會被告知要主動提議幫他裝。偏好設定存在 `~/.genie/`，跟 Codex 共用。更新：`/plugin marketplace update genie-harness` 後 `/plugin update genie-harness@genie-harness`（或在 `/plugin` 介面點更新），重開 Claude Code 才生效。模型在 plugin 目錄外，更新不會重新下載。移除：`/plugin uninstall genie-harness`。
 
 ### Codex：一鍵安裝（Quick Start）
 
@@ -147,13 +147,15 @@ router/
   overlap.py               找出也在做 guard／research／style 的其他已裝工具
   guard_dangerous.py       PreToolUse hook：擋災難指令，模糊的先警告
   done_gate.py             Stop hook（Claude Code 限定）：改了程式檔卻沒跑 → 擋一次（ls/cat 之類不算跑）
-  fail_streak.py           PostToolUse(Failure) hook：同類指令連敗 2 次 → 叫它停下重讀錯誤
+  fail_streak.py           PostToolUse(Failure) hook：同類指令或同一個檔連敗 2 次 → 叫它停下重讀錯誤
+  wheel_gate.py            PreToolUse hook：要找輪子的那一輪，第一個新檔與 ExitPlanMode 擋到跑過 wheel
   selftest.py              SessionStart 自我檢查：閘門、router、hook 路徑，正常時不出聲
   eval_set.json            87 句手寫 dev 語料（不是 benchmark）
   test_router.py           自檢：邊界案例 + dev 語料，per-class，safe=100%，派工
   test_prefs.py            自檢：30 項，含「關區塊不能關安全」
   test_guard.py            自檢：49 deny + 4 warn + 5 git 狀態警告、33 must-pass、寫入掃描
   test_done_gate.py        自檢：改完沒跑會擋、跑過就放、純問答與純文字放行
+  test_wheel_gate.py       自檢：新檔與 plan 會擋、改既有檔與 .md 放行、查過即解除、逃生閥
   test_repo.py             自檢：大小預算、無絕對路徑、hook 指向存在、不漂移
   setup_model.py           一次性：下載 potion-multilingual-128M → 修剪詞表 → int8
 skills/
@@ -308,7 +310,7 @@ Six independent blocks, each `on` / `auto` (only when needed) / `off`. `auto` is
 
 **Overlapping tools:** Genie is a whole-agent harness, not a security suite. When another installed tool does one of its jobs (`guard` command blocking, `research` prior-art search, `style` tone/verbosity), the installer lists it and the next prompt asks you once who owns that job, with a recommendation (for `guard`: the dedicated tool). Pick with `!owner <job>=<genie|tool>`. Genie stands down on that job while the other tool stays installed and takes it back if you uninstall it. Tools installed later are detected and asked about the same way.
 
-**Not blocks, and no preference can turn them off:** the catastrophic-command gate (`router/guard_dangerous.py`), Codex's sandbox and approval policy, and "say when you don't know". Turning off the nagging does not turn off the protection. For git, the gate also warns (never blocks) on the beginner mistakes that depend on repo state: discarding changes that were never committed, deleting stashes, `branch -D`, staging `.env`/key files, and making a repo public. It runs `git status` only when such a command appears, and a clean tree stays silent. It also denies two things that cannot be undone: `launchctl bootout gui/<uid>` with no label (every background job on the machine stops), and printing a credential's *value* into the conversation (`cat .env`, `printenv`, `echo $API_KEY`, `Read` on `.env`); name-only checks like `cut -d= -f1 .env` and `test -n "$X"` stay allowed. The one exception is handing `guard` to another command guard that is actually installed as a PreToolUse hook; a prefs file alone cannot do it.
+**Not blocks, and no preference can turn them off:** the catastrophic-command gate (`router/guard_dangerous.py`), Codex's sandbox and approval policy, and "say when you don't know". The **wheel gate** (`router/wheel_gate.py`) is half an exception: it follows the `research` block, so turning research off removes the gate. While it is on, a turn judged to be about building or choosing has its first new file and its ExitPlanMode held until a prior-art search has actually run -- edits to existing files and `.md` notes pass, and after a second block in the same session it opens, so it cannot wedge you. Turning off the nagging does not turn off the protection. For git, the gate also warns (never blocks) on the beginner mistakes that depend on repo state: discarding changes that were never committed, deleting stashes, `branch -D`, staging `.env`/key files, and making a repo public. It runs `git status` only when such a command appears, and a clean tree stays silent. It also denies two things that cannot be undone: `launchctl bootout gui/<uid>` with no label (every background job on the machine stops), and printing a credential's *value* into the conversation (`cat .env`, `printenv`, `echo $API_KEY`, `Read` on `.env`); name-only checks like `cut -d= -f1 .env` and `test -n "$X"` stay allowed. The one exception is handing `guard` to another command guard that is actually installed as a PreToolUse hook; a prefs file alone cannot do it.
 
 ### Claude Code (plugin)
 
@@ -319,7 +321,7 @@ Inside Claude Code:
 /plugin install genie-harness@genie-harness
 ```
 
-Restart Claude Code. The plugin registers six hooks (SessionStart loads `AGENTS.md`, fetches the model on first use and runs the self-check `router/selftest.py`, silent unless the guard or router is broken; UserPromptSubmit runs the intent router with `--host claude`, and also warns when the user pastes a key and when a session passes 150 minutes; PreToolUse runs the guard on `Bash|Write|Edit|MultiEdit|NotebookEdit|Read`; PostToolUse/PostToolUseFailure run `router/fail_streak.py`, which tells the model to stop and re-read after two failures of the same kind of command; Stop runs the done gate `router/done_gate.py`) and the five skills as `genie-harness:<name>`. The done gate is Claude Code only: if a code file (`.py`, `.js`, anything not `.md`/`.txt`) was edited and nothing was run after the last edit, it blocks once and makes you run it and show the real output, or say plainly why it cannot be run. Pure `.md`/`.txt` edits are exempt, and Codex has no such hook. **Look-only commands do not count as a run** (`ls`, `cat`, `wc`, `git status` and the like): a gate that `ls` clears is not a gate, because evidence that cannot fail is not evidence. `grep`, `sed`, `awk` and `test` still count — they are as often the assertion itself. Needs Python 3.9+ and numpy. The first session downloads the intent model in the background into `~/.genie/model` (one time, ~512 MB → 35 MB, a few minutes); until it lands, the router tells the model to judge intent itself, still wheel-first. If numpy is missing, the model is told to offer installing it. Prefs live in `~/.genie/`, shared with Codex. Update with `/plugin marketplace update genie-harness` then `/plugin update genie-harness@genie-harness` (or from the `/plugin` UI), then restart Claude Code; the model lives outside the plugin directory, so it is not downloaded again. Remove with `/plugin uninstall genie-harness`.
+Restart Claude Code. The plugin registers seven hooks (SessionStart loads `AGENTS.md`, fetches the model on first use and runs the self-check `router/selftest.py`, silent unless the guard or router is broken; UserPromptSubmit runs the intent router with `--host claude`, and also warns when the user pastes a key and when a session passes 150 minutes; PreToolUse runs the guard on `Bash|Write|Edit|MultiEdit|NotebookEdit|Read`, and the wheel gate `router/wheel_gate.py` on `Write|ExitPlanMode|Skill|SlashCommand|Bash`; PostToolUse/PostToolUseFailure run `router/fail_streak.py`, which tells the model to stop and re-read after two failures of the same kind of command; Stop runs the done gate `router/done_gate.py`) and the five skills as `genie-harness:<name>`. The done gate is Claude Code only: if a code file (`.py`, `.js`, anything not `.md`/`.txt`) was edited and nothing was run after the last edit, it blocks once and makes you run it and show the real output, or say plainly why it cannot be run. Pure `.md`/`.txt` edits are exempt, and Codex has no such hook. **Look-only commands do not count as a run** (`ls`, `cat`, `wc`, `git status` and the like): a gate that `ls` clears is not a gate, because evidence that cannot fail is not evidence. `grep`, `sed`, `awk` and `test` still count — they are as often the assertion itself. Needs Python 3.9+ and numpy. The first session downloads the intent model in the background into `~/.genie/model` (one time, ~512 MB → 35 MB, a few minutes); until it lands, the router tells the model to judge intent itself, still wheel-first. If numpy is missing, the model is told to offer installing it. Prefs live in `~/.genie/`, shared with Codex. Update with `/plugin marketplace update genie-harness` then `/plugin update genie-harness@genie-harness` (or from the `/plugin` UI), then restart Claude Code; the model lives outside the plugin directory, so it is not downloaded again. Remove with `/plugin uninstall genie-harness`.
 
 ### Codex: Quick Start (one-line install)
 
@@ -376,13 +378,15 @@ router/
   overlap.py               finds other installed tools doing guard / research / style
   guard_dangerous.py       PreToolUse hook: deny catastrophic commands, warn on ambiguous ones
   done_gate.py             Stop hook (Claude Code only): edited code, ran nothing → block once (look-only commands do not count)
-  fail_streak.py           PostToolUse(Failure) hook: same kind of command fails twice → stop and re-read
+  fail_streak.py           PostToolUse(Failure) hook: same command or same file fails twice → stop and re-read
+  wheel_gate.py            PreToolUse hook: on a prior-art turn, the first new file and ExitPlanMode wait for wheel
   selftest.py              SessionStart self-check of guard, router and hook paths; silent when healthy
   eval_set.json            87 hand-written dev cases (NOT a benchmark)
   test_router.py           self-check: boundary cases + dev set, per-class, safe=100%, dispatch
   test_prefs.py            self-check: 30 tests incl. blocks-cannot-disable-enforcement
   test_guard.py            self-check: 49 deny + 4 warn rules + 5 git-state warns, 33 must-pass, write scan
   test_done_gate.py        self-check: unrun edits blocked, run-after passes, Q&A and docs pass
+  test_wheel_gate.py       self-check: new files and plans blocked, edits and .md pass, lookup clears, escape valve
   test_repo.py             self-check: size budget, no hardcoded paths, hooks resolve, no drift
   setup_model.py           one-time: download potion-multilingual-128M → trim vocab → int8
 skills/

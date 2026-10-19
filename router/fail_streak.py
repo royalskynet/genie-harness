@@ -23,7 +23,7 @@ DEFAULT_STATE_DIR = os.path.expanduser("~/.genie/state")
 EXCLUDED_COMMANDS = frozenset(("grep", "rg", "test", "[", "diff", "cmp"))
 FINGERPRINT_SKIP_PREFIXES = ("sudo",)
 WARNING_MESSAGE = (
-    "Genie: the same kind of command ({fp}) failed twice in a row. "
+    "Genie: the same operation ({fp}) failed twice in a row. "
     "Stop. Re-read the error text, state your hypothesis in one sentence, "
     "then try once more. If it fails a third time, change approach or ask the user."
 )
@@ -62,6 +62,20 @@ def _extract_fingerprint(command):
         if not second.startswith("-"):
             return first + " " + second
     return first
+
+
+# "Stop after the same fix fails twice" is not about Bash alone: the loop that
+# actually happens is Edit failing on the same file over and over (old_string
+# not found), and a Bash-only matcher never saw it. The file is the fingerprint
+# there, the way the first word is for a command.
+EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+
+
+def _edit_fingerprint(tool_name, tool_input):
+    path = (tool_input or {}).get("file_path") or (tool_input or {}).get("notebook_path")
+    if not isinstance(path, str) or not path.strip():
+        return None
+    return "%s %s" % (tool_name, os.path.basename(path.rstrip("/")))
 
 
 def _is_excluded_failure(command, error):
@@ -129,7 +143,7 @@ def main():
         return  # fail open
 
     tool_name = data.get("tool_name")
-    if tool_name != "Bash":
+    if tool_name != "Bash" and tool_name not in EDIT_TOOLS:
         return
 
     hook_event = data.get("hook_event_name")
@@ -138,7 +152,12 @@ def main():
     command = tool_input.get("command")
     error = data.get("error")
 
-    if not session_id or not command:
+    if not session_id:
+        return
+    # One fingerprint either way, so the counting below stays untouched.
+    if tool_name != "Bash":
+        command = _edit_fingerprint(tool_name, tool_input)
+    if not command:
         return
 
     state_dir = os.environ.get("GENIE_STATE_DIR", DEFAULT_STATE_DIR)

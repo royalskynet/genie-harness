@@ -46,6 +46,10 @@ def bash(command="pytest"):
     return {"type": "tool_use", "name": "Bash", "input": {"command": command}}
 
 
+def say(text):
+    return {"type": "text", "text": text}
+
+
 def write_transcript(directory, lines, name="t.jsonl"):
     path = os.path.join(directory, name)
     with open(path, "w", encoding="utf-8") as fh:
@@ -91,6 +95,14 @@ MUST_BLOCK = [
     ("chained look-only commands are not a run",
      [user(), assistant(edit("a.py"), bash("cd /tmp && ls | wc -l"))]),
     ("empty bash command is not a run", [user(), assistant(edit("a.py"), bash("   "))]),
+    # Invented ids: a hash or issue URL nothing in the session ever printed.
+    ("invented commit hash",
+     [user("commit it"), assistant(bash("git commit -am x")), tool_result("[main 1a2b3c4] x"),
+      assistant(say("Committed as 9f8e7d6c."))]),
+    ("invented issue URL",
+     [user("file a bug"), assistant(say("Opened https://github.com/acme/app/issues/42 for it."))]),
+    ("invented id inside markdown emphasis",
+     [user(), assistant(bash("pytest")), tool_result("ok"), assistant(say("Pushed **`c0ffee1`**."))]),
 ]
 
 # --- must pass: nothing to run, or already handled --------------------------
@@ -120,6 +132,25 @@ MUST_PASS = [
     ("git commit is a real command",
      [user(), assistant(edit("a.py"), bash("git commit -am wip"))]),
     ("empty transcript", []),
+    ("hash quoted from tool output",
+     [user(), assistant(bash("git commit -am x")), tool_result("[main 1a2b3c4d] x"),
+      assistant(say("Committed as 1a2b3c4."))]),
+    ("longer hash extends the short one printed",
+     [user(), assistant(bash("git log -1 --format=%h")), tool_result("1a2b3c4"),
+      assistant(say("HEAD is 1a2b3c4d5e."))]),
+    ("issue URL the user pasted",
+     [user("look at https://github.com/acme/app/issues/42"),
+      assistant(say("Read https://github.com/acme/app/issues/42; it is a dupe."))]),
+    ("issue URL rebuilt from gh fields",
+     [user(), assistant(bash("gh issue view 42 --json number")),
+      tool_result('{"number": 42, "url": "acme/app"}'),
+      assistant(say("See https://github.com/acme/app/issues/42."))]),
+    ("placeholder URL from docs",
+     [user(), assistant(say("Pattern: https://github.com/owner/repo/issues/1"))]),
+    ("hash shown in a file attachment",
+     [user(), {"type": "attachment", "attachment": {"type": "edited_text_file", "snippet": "# 35c92ff cut batches"}},
+      assistant(say("That came from 35c92ff."))]),
+    ("plain number is not a hash", [user(), assistant(say("Loaded 1234567 rows."))]),
 ]
 
 # Any truthy `stop_hook_active` counts as a re-entry. Claude Code sets it so a

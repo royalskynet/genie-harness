@@ -16,10 +16,17 @@ makes the cheap half of them a gate:
 
 No model call. Fails OPEN like the other gates. Claude Code only: Codex has no
 AskUserQuestion tool.
+
+Every deny starts with "Genie decide_gate:" and appends one JSONL line to
+~/.genie/decide.log (`GENIE_DECIDE_LOG` = a path, or "0" to opt out). Another
+gate on the same tool shows one deny reason to the model, so without these the
+stacked case cannot tell who blocked.
 """
 import json
+import os
 import re
 import sys
+import time
 
 # The four kinds, as words that show up in questions about them. Erring towards
 # "irreversible" only costs a recommendation line; the other way skips a question
@@ -33,6 +40,8 @@ IRREVERSIBLE = re.compile(
     r"付費|訂閱|花錢|購買|信用卡|系統設定|不可逆|改規則|制度|憑證|金鑰",
     re.I)
 RECOMMENDED = re.compile(r"\(recommended\)|（建議）|\(建議\)|（推薦）", re.I)
+SOURCE = "Genie decide_gate: "
+LOG_MAX_BYTES = 1024 * 1024  # same cap as route.log; one older file kept as .1
 
 TAKE = ("You already picked \"%s\" as the recommended option, and this is reversible. "
         "Do it instead of asking. In your reply, say in one line which default you took "
@@ -63,6 +72,28 @@ def judge(question):
     return None
 
 
+def log_deny(kind, questions):
+    """Append one record per deny. Errors are swallowed: logging must never
+    turn a fail-open gate into a failing one."""
+    try:
+        env = os.environ.get("GENIE_DECIDE_LOG")
+        if env == "0":
+            return
+        path = os.path.expanduser(env or "~/.genie/decide.log")
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        if os.path.exists(path) and os.path.getsize(path) > LOG_MAX_BYTES:
+            os.replace(path, path + ".1")
+        rec = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "kind": kind,
+               "question": " | ".join(str((q or {}).get("question") or "")[:200]
+                                      for q in questions if isinstance(q, dict))}
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        return
+
+
 def main():
     try:
         data = json.loads(sys.stdin.read() or "{}")
@@ -76,9 +107,10 @@ def main():
         takes = [t for k, t in verdicts if k == "take"]
         reason = lints[0] if lints else (" ".join(takes) if takes and len(takes) == len(questions) else None)
         if reason:
+            log_deny("lint" if lints else "take", questions)
             json.dump({"hookSpecificOutput": {"hookEventName": "PreToolUse",
                                               "permissionDecision": "deny",
-                                              "permissionDecisionReason": reason}}, sys.stdout)
+                                              "permissionDecisionReason": SOURCE + reason}}, sys.stdout)
     except Exception:
         return  # fail open
 

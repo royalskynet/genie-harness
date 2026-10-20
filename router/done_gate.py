@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Genie Done Gate — Claude Code `Stop` hook: block once when the assistant
-edited a code file after the user's last message and ran nothing afterwards.
+"""Genie Done Gate — Claude Code `Stop` hook. Blocks once when either holds:
+
+1. The assistant edited a code file after the user's last message and ran
+   nothing afterwards.
+2. The final reply cites a commit hash or a GitHub issue/PR URL that appears in
+   no tool output and no user message this session (an invented result).
 
 Exempt: .md/.txt edits, `stop_hook_active` re-entry, earlier turns.
 Fails OPEN like guard_dangerous.py. Claude Code only (Codex has no Stop hook here).
 """
 import json
+import re
 import sys
 
 EDIT_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
@@ -23,6 +28,89 @@ NOOP_CMDS = {"cd", "ls", "pwd", "echo", "printf", "date", "which", "command",
 # `git <sub>` that only reports. `git status` after an edit is the classic
 # "I ran something" that proves nothing about the change.
 NOOP_GIT_SUBS = {"status", "diff", "log", "show", "branch", "remote"}
+
+# Invented-id check. Only ids that can be quoted but never derived: a hash or an
+# issue number is either in some output or it was made up. Numbers are left out
+# on purpose -- sums and percentages are computed, so a correct one is absent
+# from every output by construction (measured on 1423 transcripts: ~65% of raw
+# hits were numbers, all inspected ones false). Ported from jev-gate idcheck.js.
+ID_REASON = ("Your reply cites %s, which appears in no tool output or user message "
+             "this session. An id can only be quoted, not derived. Run the command and "
+             "quote what it returned, or remove the id. Saying plainly that something "
+             "is unverified is fine.")
+EMPH = re.compile(r"\*\*|__|\*|`")
+GH_ISSUE = re.compile(r"https?://github\.com/([\w.-]+)/([\w.-]+)/(?:issues|pull)/(\d+)", re.I)
+HASH = re.compile(r"\b[0-9a-f]{7,40}\b")
+HEX_RUN = re.compile(r"[0-9a-f]{7,}")
+PLACEHOLDER = re.compile(r"^(org|owner|user|username|you|your-?\w*|example|repo|myorg|foo|bar)$", re.I)
+
+
+def _hexish(t):
+    return any(ch in "abcdef" for ch in t)  # 1234567 is a number, not a hash
+
+
+def unsupported_ids(claim, evidence):
+    """Ids asserted in `claim` that nothing in `evidence` supports. [] when either is empty."""
+    c, e = EMPH.sub("", claim or ""), EMPH.sub("", evidence or "")
+    if not c.strip() or not e.strip():
+        return []
+    out = []
+    for m in GH_ISSUE.finditer(c):
+        full, owner, repo, num = m.group(0), m.group(1), m.group(2), m.group(3)
+        if PLACEHOLDER.match(owner) or PLACEHOLDER.match(repo) or full in e:
+            continue
+        # `gh issue view` prints repo and number in separate fields, never the URL.
+        if repo in e and re.search(r"(?:\"?number\"?\s*[:=]\s*|#|issues/|pull/)%s\b" % num, e):
+            continue
+        out.append(full)
+    for t in dict.fromkeys(HASH.findall(c)):
+        if not _hexish(t) or t in e:
+            continue
+        # A longer claimed hash can extend a short one the output printed.
+        if any(_hexish(r) and t.startswith(r) for r in HEX_RUN.findall(e)):
+            continue
+        out.append(t)
+    return out
+
+
+def _text(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(_text(b.get("text") if b.get("type") == "text" else b.get("content"))
+                         if isinstance(b, dict) else str(b) for b in content)
+    return "" if content is None else str(content)
+
+
+def _lines(path, attachments=False):
+    lines = []
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for raw in fh:
+            try:
+                line = json.loads(raw)
+            except ValueError:
+                continue  # half-flushed line must not disable the gate
+            if isinstance(line, dict) and isinstance(line.get("message"), dict):
+                lines.append((line.get("type"), line["message"].get("content")))
+            elif attachments and isinstance(line, dict) and line.get("attachment"):
+                # File contents and hook context the model was shown are evidence too.
+                lines.append(("user", json.dumps(line["attachment"], ensure_ascii=False)))
+    return lines
+
+
+def invented_ids(path, last_message=None):
+    """Ids in the final reply that no tool output or user message contains."""
+    lines = _lines(path, attachments=True)
+    evidence = "\n".join(_text(c) for t, c in lines if t == "user")
+    claim = last_message
+    if claim is None:
+        for t, c in reversed(lines):
+            if t == "assistant" and isinstance(c, list) and any(
+                    isinstance(b, dict) and b.get("type") == "text" for b in c):
+                claim = "\n".join(b.get("text", "") for b in c
+                                  if isinstance(b, dict) and b.get("type") == "text")
+                break
+    return unsupported_ids(claim or "", evidence)
 
 
 def counts_as_run(command):
@@ -54,15 +142,7 @@ def counts_as_run(command):
 
 
 def needs_run(path):
-    lines = []
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        for raw in fh:
-            try:
-                line = json.loads(raw)
-            except ValueError:
-                continue  # half-flushed line must not disable the gate
-            if isinstance(line, dict) and isinstance(line.get("message"), dict):
-                lines.append((line.get("type"), line["message"].get("content")))
+    lines = _lines(path)
 
     # A typed user turn; tool results also arrive as type=user, as a list of tool_result.
     def typed(c):
@@ -98,6 +178,10 @@ def main():
             return
         if needs_run(data["transcript_path"]):
             json.dump({"decision": "block", "reason": REASON}, sys.stdout)
+            return
+        ids = invented_ids(data["transcript_path"], data.get("last_assistant_message"))
+        if ids:
+            json.dump({"decision": "block", "reason": ID_REASON % ", ".join(ids[:5])}, sys.stdout)
     except Exception:
         return  # fail open
 

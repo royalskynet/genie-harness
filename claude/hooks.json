@@ -27,6 +27,13 @@
           { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/wheel_gate.py\"", "timeout": 5 }
         ]
       }
+,
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/decide_gate.py\"", "timeout": 5 }
+        ]
+      }
     ],
     "Stop": [
       {

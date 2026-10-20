@@ -115,7 +115,8 @@ Genie 先在本地判斷你這句話是什麼意圖，再用一行 `DO:` 告訴�
 - **災難指令閘**（`guard_dangerous.py`）：擋 `rm -rf /`、不帶 label 的 `launchctl bootout`、把憑證的值印進對話（`cat .env`、`printenv`、`echo $API_KEY`）。只看變數名的 `cut -d= -f1 .env` 照常放行。
 - **git 新手警告**（只警告不擋）：丟掉沒 commit 的改動、刪 stash、`branch -D`、把 `.env` 加進 git、把 repo 設公開。工作區乾淨就不出聲。
 - **輪子閘**（`wheel_gate.py`）：判定要找現成方案的那一輪，第一個新檔和 ExitPlanMode（計畫定案）擋到跑過 wheel 為止。改既有檔、寫 `.md` 不擋；同一 session 擋第二次就放行，卡不住你。跟著 `research` 區塊走。
-- **完成閘**（`done_gate.py`，只有 Claude Code）：改了程式檔卻什麼都沒跑，擋一次要你跑給它看。`ls`／`cat`／`git status` 這類只看一眼的指令不算跑過。Codex 沒有對等的 Stop 事件，所以沒接。
+- **完成閘**（`done_gate.py`，只有 Claude Code）：改了程式檔卻什麼都沒跑，擋一次要你跑給它看。`ls`／`cat`／`git status` 這類只看一眼的指令不算跑過。收尾那句引用的 commit hash 或 GitHub issue／PR 網址，若這個 session 的工具輸出和你的訊息裡都沒出現過，也擋一次：這種 ID 只能照抄、不能推算，沒出現過就是編的。數字不查（加總、百分比本來就是算出來的）。Codex 沒有對等的 Stop 事件，所以沒接。
+- **決定閘**（`decide_gate.py`，只有 Claude Code）：可逆的問題，模型自己已經標了唯一一個「(Recommended)」，就不准問你，直接照它做，回報時講一句採用了哪個預設、怎麼改。不可逆的問題一定問，但必須剛好標一個建議選項並寫理由，空白選擇題擋回去重問。不呼叫模型。
 - **連敗閘**（`fail_streak.py`）：同一個指令或同一個檔連續失敗 2 次，叫模型停下重讀錯誤，不試第三招。
 - **宿主權限層**：Codex 的 sandbox／approval、Claude Code 的權限確認。
 
@@ -225,7 +226,8 @@ router/
   overlap.py               找出也在做 guard／research／style 的其他工具
   guard_dangerous.py       PreToolUse：擋災難指令，模糊的先警告
   wheel_gate.py            PreToolUse：要找輪子的那一輪，新檔與 ExitPlanMode 擋到跑過 wheel
-  done_gate.py             Stop（Claude Code 限定）：改了程式檔卻沒跑 → 擋一次
+  done_gate.py             Stop（Claude Code 限定）：改了程式檔卻沒跑，或引用沒出現過的 commit／issue → 擋一次
+  decide_gate.py           PreToolUse(AskUserQuestion)：可逆且已有建議 → 照做不問；不可逆缺建議或理由 → 重問
   fail_streak.py           PostToolUse(Failure)：同指令或同檔連敗 2 次 → 停下重讀
   selftest.py              SessionStart 自我檢查，正常時不出聲
   eval_set.json            102 句手寫 dev 語料（不是 benchmark）
@@ -369,7 +371,8 @@ Not blocks; no preference disables them:
 - **Catastrophic-command gate** (`guard_dangerous.py`): denies `rm -rf /`, `launchctl bootout` with no label, and printing a credential's value into the chat (`cat .env`, `printenv`, `echo $API_KEY`). Name-only checks like `cut -d= -f1 .env` pass.
 - **Git beginner warnings** (warn, never block): discarding uncommitted changes, deleting stashes, `branch -D`, staging `.env`, making a repo public. A clean tree stays silent.
 - **Wheel gate** (`wheel_gate.py`): on a turn judged to be about building or choosing, the first new file and ExitPlanMode (a plan is a decision) wait until a prior-art search has run. Edits to existing files and `.md` pass; a second block in the same session opens it, so it can't wedge you. Follows the `research` block.
-- **Done gate** (`done_gate.py`, Claude Code only): edited code and ran nothing → blocks once and asks for a real run. Look-only commands (`ls`, `cat`, `git status`) don't count. Codex has no matching Stop event, so it is not wired there.
+- **Done gate** (`done_gate.py`, Claude Code only): edited code and ran nothing → blocks once and asks for a real run. Look-only commands (`ls`, `cat`, `git status`) don't count. It also blocks once when the final reply cites a commit hash or a GitHub issue/PR URL that no tool output or user message this session contains: such ids can only be quoted, not derived. Numbers are not checked (sums and percentages are computed). Codex has no matching Stop event, so it is not wired there.
+- **Decide gate** (`decide_gate.py`, Claude Code only): a reversible question where the model already marked exactly one option "(Recommended)" is denied, so it does that and says in one line which default it took. Irreversible questions are always asked, but must mark exactly one recommendation with a reason; a bare choice is sent back. No model call.
 - **Fail-streak gate** (`fail_streak.py`): the same command or the same file fails twice → the model stops and re-reads the error instead of trying a third variant.
 - **Host permissions**: Codex sandbox/approval, Claude Code permission prompts.
 
@@ -479,7 +482,8 @@ router/
   overlap.py               finds other tools doing guard / research / style
   guard_dangerous.py       PreToolUse: deny catastrophic commands, warn on ambiguous ones
   wheel_gate.py            PreToolUse: on a prior-art turn, new files and ExitPlanMode wait for wheel
-  done_gate.py             Stop (Claude Code only): edited code, ran nothing → block once
+  done_gate.py             Stop (Claude Code only): edited code and ran nothing, or cited an unseen commit/issue → block once
+  decide_gate.py           PreToolUse(AskUserQuestion): reversible with a recommendation → do it; irreversible without one → re-ask
   fail_streak.py           PostToolUse(Failure): same command or file fails twice → stop and re-read
   selftest.py              SessionStart self-check, silent when healthy
   eval_set.json            102 hand-written dev cases (NOT a benchmark)

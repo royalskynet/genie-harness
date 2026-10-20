@@ -24,8 +24,13 @@ EXCLUDED_COMMANDS = frozenset(("grep", "rg", "test", "[", "diff", "cmp"))
 FINGERPRINT_SKIP_PREFIXES = ("sudo",)
 WARNING_MESSAGE = (
     "Genie: the same operation ({fp}) failed twice in a row. "
-    "Stop. Re-read the error text, state your hypothesis in one sentence, "
-    "then try once more. If it fails a third time, change approach or ask the user."
+    "Stop. Re-read the error text, state your hypothesis in one sentence. "
+    "Before blaming the model or a timeout, list three alternative causes that a "
+    "check could prove wrong (stale config or state, permissions, wrong route or "
+    "path, a dependency not running) and run the smallest check for each. "
+    "Swapping models, raising the timeout, resending or restarting is not a fix "
+    "until those are ruled out. Then try once more. If it fails a third time, "
+    "change approach or ask the user."
 )
 
 

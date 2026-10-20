@@ -31,6 +31,16 @@ class GetTest(unittest.TestCase):
             encoding="utf-8",
         )
         (self.bin / "python3").symlink_to(sys.executable)
+        # Fake git: `clone <url> <dir>` makes a repo with the files get.sh uses.
+        git = self.bin / "git"
+        git.write_text(
+            "#!/bin/sh\n"
+            f'echo "git $*" >> "{self.calls}"\n'
+            'if [ "$1" = clone ]; then eval d=\\${$#}; mkdir -p "$d/.git" "$d/skills/wheel"; '
+            'touch "$d/skills/wheel/SKILL.md"; '
+            f'printf \'echo "addon-install $0" >> "{self.calls}"\\n\' > "$d/install.sh"; fi\n',
+            encoding="utf-8")
+        git.chmod(0o755)
 
     def fake_claude(self):
         claude = self.bin / "claude"
@@ -42,15 +52,19 @@ class GetTest(unittest.TestCase):
         return subprocess.run(["bash", str(ROOT / "get.sh"), *args], env=env,
                               capture_output=True, text=True, timeout=30)
 
-    def log(self):
-        return self.calls.read_text(encoding="utf-8").splitlines() if self.calls.exists() else []
+    def log(self, prefix=""):
+        lines = self.calls.read_text(encoding="utf-8").splitlines() if self.calls.exists() else []
+        return [l for l in lines if l.startswith(prefix)]
 
     def test_fresh_claude_adds_and_installs(self):
         self.fake_claude()
         r = self.run_get("claude")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(self.log(), ["claude plugin marketplace add royalskynet/genie-harness",
-                                      f"claude plugin install {KEY}"])
+        self.assertEqual(self.log("claude"), ["claude plugin marketplace add royalskynet/genie-harness",
+                                              f"claude plugin install {KEY}"])
+        # wheel is on by default and becomes a Claude user skill
+        self.assertTrue(any("royalskynet/wheel-it" in l for l in self.log("git clone")))
+        self.assertTrue((self.home / ".claude" / "skills" / "wheel").is_symlink())
 
     def test_installed_claude_updates_through_safe_update(self):
         self.fake_claude()
@@ -58,7 +72,7 @@ class GetTest(unittest.TestCase):
             json.dumps({"genie-harness": {"installLocation": str(self.market)}}), encoding="utf-8")
         (self.plugins / "installed_plugins.json").write_text(
             json.dumps({"plugins": {KEY: [{"scope": "user", "version": "0.5.1"}]}}), encoding="utf-8")
-        r = self.run_get("claude")
+        r = self.run_get("claude", "--no-wheel")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.log(), ["claude plugin marketplace update genie-harness",
                                       f"safe_update {KEY}"])
@@ -71,6 +85,31 @@ class GetTest(unittest.TestCase):
     def test_unknown_host(self):
         r = self.run_get("vscode")
         self.assertEqual(r.returncode, 2)
+        self.assertEqual(self.log(), [])
+
+    def test_with_all_installs_fixindex_and_ponytail(self):
+        self.fake_claude()
+        r = self.run_get("claude", "--with", "all")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(any("royalskynet/fixindex" in l for l in self.log("git clone")))
+        self.assertEqual(len(self.log("addon-install")), 1)  # fixindex's own install.sh ran
+        self.assertIn("claude plugin marketplace add DietrichGebert/ponytail", self.log("claude"))
+        self.assertIn("claude plugin install ponytail@ponytail", self.log("claude"))
+        self.assertTrue((self.home / "notes" / "runbook" / "fixes").is_dir())
+
+    def test_unknown_addon_touches_nothing(self):
+        self.fake_claude()
+        r = self.run_get("claude", "--with=fixindx")
+        self.assertEqual(r.returncode, 2)
+        self.assertEqual(self.log(), [])
+
+    def test_existing_wheel_command_is_left_alone(self):
+        self.fake_claude()
+        (self.home / ".claude" / "commands").mkdir(parents=True)
+        (self.home / ".claude" / "commands" / "wheel.md").write_text("mine", encoding="utf-8")
+        r = self.run_get("claude")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse((self.home / ".claude" / "skills" / "wheel").exists())
 
 
 if __name__ == "__main__":

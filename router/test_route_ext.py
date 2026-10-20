@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-check for route_ext.py. Run: python3 router/test_route_ext.py
+r"""Self-check for route_ext.py. Run: python3 router/test_route_ext.py
 
 Covers:
 - \| restoration in columns
@@ -22,7 +22,7 @@ import route_ext as r
 
 
 def test_pipe_restoration():
-    """\| in action/kw columns restored to |"""
+    r"""\| in action/kw columns restored to |"""
     md = """## 任務路由表
 | 情境 | 動作 | 關鍵字 |
 |------|------|--------|

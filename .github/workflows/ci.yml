@@ -32,6 +32,9 @@ jobs:
 
       - name: shell syntax
         run: bash -n install.sh update.sh claude/session_start.sh
+      # Invalid escapes like "\|" only warn today; a later Python makes them errors.
+      - name: python syntax
+        run: python -W error::SyntaxWarning -m compileall -q -f router tests
       - name: python tests
         env:
           GENIE_STATE_DIR: ${{ runner.temp }}/genie-state

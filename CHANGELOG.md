@@ -2,7 +2,7 @@
 
 每一版改了什麼。最新的在最上面。 · What changed in each version, newest first.
 
-## 未發版 · Unreleased
+## 0.5.3 — 2026-10-20
 
 - 一行安裝：`curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.sh | bash`。它會偵測電腦上的 `claude` 和 `codex`，沒裝的就裝，裝過的就更新。
   One-line install: `get.sh` detects `claude` and `codex`, installs what is missing and updates what is there.

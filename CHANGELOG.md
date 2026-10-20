@@ -2,6 +2,11 @@
 
 每一版改了什麼。最新的在最上面。 · What changed in each version, newest first.
 
+## 未發版 · Unreleased
+
+- `get.sh` 一起裝附加元件：wheel 預設裝（`--no-wheel` 跳過），fixindex、ponytail 用 `--with fixindex,ponytail` 或 `--with all`。已裝的會更新，不覆蓋你自己的 wheel skill 或指令。
+  `get.sh` installs add-ons: wheel by default, fixindex and ponytail with `--with`. Existing ones are updated; your own wheel skill or command is left alone.
+
 ## 0.5.3 — 2026-10-20
 
 - 一行安裝：`curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.sh | bash`。它會偵測電腦上的 `claude` 和 `codex`，沒裝的就裝，裝過的就更新。

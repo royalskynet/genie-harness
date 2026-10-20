@@ -4,8 +4,13 @@
 
 ## 未發版 · Unreleased
 
-- `get.sh` 一起裝附加元件：wheel 預設裝（`--no-wheel` 跳過），fixindex、ponytail 用 `--with fixindex,ponytail` 或 `--with all`。已裝的會更新，不覆蓋你自己的 wheel skill 或指令。
-  `get.sh` installs add-ons: wheel by default, fixindex and ponytail with `--with`. Existing ones are updated; your own wheel skill or command is left alone.
+- `get.sh` 分兩種用法：
+  - **一般**（`| bash`）：Genie 沒裝就裝、有新版就更新、最新就跳過；附加元件（wheel、fixindex、ponytail）沒裝的一個一個問，已裝的不動。
+  - **完整安裝**（`| bash -s -- --all`）：沒裝的全部裝、不問；已裝的有新版先問要不要更新，最新就跳過。
+  - `-y` 全部回答「要」。沒有終端機時，一般模式不裝附加元件，完整安裝一律回答「要」。
+  `get.sh` has two modes: default asks about each missing add-on and leaves installed ones alone; `--all` installs every missing one, asks before updating installed ones, and skips what is latest. `-y` answers yes to everything.
+- 已裝的判斷：plugin 比對市集版本號，git 安裝比對上游 commit。你自己的 wheel skill 或指令算已裝，不覆蓋。
+  Installed vs. latest: plugins by marketplace version, git installs by upstream commits. Your own wheel skill or command counts as installed.
 
 ## 0.5.3 — 2026-10-20
 

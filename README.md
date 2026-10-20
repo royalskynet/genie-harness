@@ -31,19 +31,21 @@ curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.
 
 它會看你電腦上有哪個：有 `claude` 就裝 Claude Code 版，有 `codex` 就裝 Codex 版，兩個都有就都裝。只要其中一個，在最後加 `-s claude` 或 `-s codex`。
 
-**附加元件**（各自是獨立的 repo，同一行指令可以一起裝）：
+**附加元件**（各自是獨立的 repo）：
 
-- **wheel**（[royalskynet/wheel-it](https://github.com/royalskynet/wheel-it)）：找現成輪子，`$wheel` 和輪子閘靠它。**預設一起裝**，不要就加 `--no-wheel`。
+- **wheel**（[royalskynet/wheel-it](https://github.com/royalskynet/wheel-it)）：找現成輪子，`$wheel` 和輪子閘靠它。
 - **fixindex**（[royalskynet/fixindex](https://github.com/royalskynet/fixindex)）：個人修 bug 紀錄，修過的錯再遇到能用錯誤訊息找回來；裝了以後「壞了」那類訊息會先查它。要 ripgrep。
 - **ponytail**（[DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail)）：讓模型寫最少的程式。
 
-fixindex 和 ponytail 要指定才裝：
+上面那一行遇到**沒裝**的附加元件會一個一個問你要不要裝，已經裝的不動。
+
+**完整安裝**：全部裝，不問。已經裝過的有新版會先問你要不要更新，已經是最新就跳過。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.sh | bash -s -- --with all
+curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.sh | bash -s -- --all
 ```
 
-只要其中一個就寫 `--with fixindex` 或 `--with ponytail`。Codex 的 ponytail 只會加進市集，要在 Codex 裡打 `/plugins` 裝。
+加 `-y` 全部回答「要」。沒有終端機可以問的時候（例如讓 AI 代你跑），一般模式不裝附加元件，完整安裝一律回答「要」。Codex 的 ponytail 只會加進市集，要在 Codex 裡打 `/plugins` 裝。
 
 也可以在 Claude Code 裡打：`/plugin marketplace add royalskynet/genie-harness`，再打 `/plugin install genie-harness@genie-harness`。
 
@@ -51,7 +53,7 @@ curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.
 - **意圖模型**：約 512 MB，處理後留 35 MB，下載一次要幾分鐘。
   - **Claude Code**：第一次開 session 時在背景下載到 `~/.genie/model`。下載完前一樣能用，由模型自己判斷意圖。
   - **Codex**：`install.sh` 安裝時當場下載到 repo 裡的 `router/model`，下載完才裝完。
-- **wheel（找輪子）**：在另一個 repo，`get.sh` 會一起裝到 `~/dev/wheel`（見上面附加元件）。手動裝 Codex 版時沒有它，安裝器印 `skipping wheel` 照樣裝完，只是少了找輪子。
+- **wheel（找輪子）**：在另一個 repo，`get.sh` 會問你要不要裝到 `~/dev/wheel`（見上面附加元件）。手動裝 Codex 版時沒有它，安裝器印 `skipping wheel` 照樣裝完，只是少了找輪子。
 - **平台**：macOS 實測可用。Linux、WSL 沒有實測。Windows 原生不支援（hook 是 sh 腳本）。
 - **numpy 裝不上**：Homebrew Python 出現 `externally-managed-environment` 時，跑 `python3 -m pip install --user --break-system-packages numpy`。
 
@@ -304,19 +306,21 @@ curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.
 
 It looks at what you have: `claude` gets the Claude Code plugin, `codex` gets the Codex install, both get both. For only one, add `-s claude` or `-s codex` at the end.
 
-**Add-ons** (separate repos; the same line can install them):
+**Add-ons** (separate repos):
 
-- **wheel** ([royalskynet/wheel-it](https://github.com/royalskynet/wheel-it)): prior-art search behind `$wheel` and the wheel gate. **Installed by default**; add `--no-wheel` to skip.
+- **wheel** ([royalskynet/wheel-it](https://github.com/royalskynet/wheel-it)): prior-art search behind `$wheel` and the wheel gate.
 - **fixindex** ([royalskynet/fixindex](https://github.com/royalskynet/fixindex)): a personal fix log, so a bug fixed once is found again by its error text; with it, "it's broken" turns check it first. Needs ripgrep.
 - **ponytail** ([DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail)): keeps the code the model writes minimal.
 
-fixindex and ponytail only on request:
+The line above asks, one by one, about each add-on that is **missing**; installed ones are left alone.
+
+**Full install**: installs everything without asking. For what is already installed it asks before updating, and skips what is already latest.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.sh | bash -s -- --with all
+curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.sh | bash -s -- --all
 ```
 
-For one, use `--with fixindex` or `--with ponytail`. On Codex, ponytail is only added to the marketplace; install it from `/plugins` in Codex.
+Add `-y` to answer yes to everything. With no terminal to ask (an AI running it for you), the default line installs no add-on and the full install answers yes. On Codex, ponytail is only added to the marketplace; install it from `/plugins` in Codex.
 
 Or inside Claude Code: `/plugin marketplace add royalskynet/genie-harness`, then `/plugin install genie-harness@genie-harness`.
 
@@ -324,7 +328,7 @@ Or inside Claude Code: `/plugin marketplace add royalskynet/genie-harness`, then
 - **Intent model**: ~512 MB, 35 MB after processing, a few minutes to download once.
   - **Claude Code**: downloaded in the background to `~/.genie/model` on the first session. Until then it still works; the model judges intent itself.
   - **Codex**: `install.sh` downloads it on the spot into the repo's `router/model`; install finishes after the download.
-- **wheel (prior-art search)**: lives in a separate repo; `get.sh` installs it to `~/dev/wheel` (see add-ons above). A manual Codex install without it prints `skipping wheel` and finishes, minus prior-art search.
+- **wheel (prior-art search)**: lives in a separate repo; `get.sh` offers to install it to `~/dev/wheel` (see add-ons above). A manual Codex install without it prints `skipping wheel` and finishes, minus prior-art search.
 - **Platforms**: tested on macOS. Linux and WSL untested. Native Windows unsupported (hooks are sh scripts).
 - **numpy won't install**: on Homebrew Python with `externally-managed-environment`, run `python3 -m pip install --user --break-system-packages numpy`.
 

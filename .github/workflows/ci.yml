@@ -31,7 +31,7 @@ jobs:
       - run: '[ -f router/model/vocab.json ] || python router/setup_model.py'
 
       - name: shell syntax
-        run: bash -n install.sh update.sh claude/session_start.sh
+        run: bash -n install.sh update.sh get.sh claude/session_start.sh
       # Invalid escapes like "\|" only warn today; a later Python makes them errors.
       - name: python syntax
         run: python -W error::SyntaxWarning -m compileall -q -f router tests
@@ -40,7 +40,7 @@ jobs:
           GENIE_STATE_DIR: ${{ runner.temp }}/genie-state
         run: |
           set -e
-          for t in router/test_*.py tests/test_install.py; do
+          for t in router/test_*.py tests/test_*.py; do
             echo "== $t"
             python "$t"
           done

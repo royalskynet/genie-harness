@@ -50,8 +50,10 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main &&
 Codex：**再跑一次上面安裝那一行**，它會先抓最新版的 `update.sh` 再更新。上游歷史在 2026-10-19 改寫過一次，舊安裝的 `git pull` 會失敗，這一行會處理：本地沒改動就對齊最新版，舊版留在 `genie-before-update-*` 分支；有改動就停下來不動。
 
 ```bash
-claude plugin marketplace update genie-harness && claude plugin update genie-harness@genie-harness   # Claude Code
+claude plugin marketplace update genie-harness && python3 "$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.claude/plugins/known_marketplaces.json')))['genie-harness']['installLocation'])")/router/safe_update.py"   # Claude Code
 ```
+
+Claude Code 原生的 `claude plugin update` 會刪掉舊版，開著的 session 的 hook 會找不到檔、擋下每個工具。`safe_update.py` 先備份，所有 scope（user 和各專案）一起升，開著的 session 繼續用舊版，等沒有 session 在用了才清掉。
 
 更新完重開 Codex／Claude Code 才生效。模型不會重新下載，偏好設定（`~/.genie/`）會保留。
 
@@ -231,9 +233,10 @@ router/
   decide_gate.py           PreToolUse(AskUserQuestion)：可逆且已有建議 → 照做不問；不可逆缺建議或理由 → 重問
   fail_streak.py           PostToolUse(Failure)：同指令或同檔連敗 2 次 → 停下重讀、先排除替代原因
   blame_gate.py            Stop（Claude Code 限定）：怪模型或 timeout 卻沒列替代原因 → 擋一次
+  safe_update.py           Claude Code 更新：所有 scope 一起升，舊版留給開著的 session
   selftest.py              SessionStart 自我檢查，正常時不出聲
   eval_set.json            102 句手寫 dev 語料（不是 benchmark）
-  test_*.py                11 支自檢，全部要 PASS
+  test_*.py                14 支自檢，全部要 PASS
   setup_model.py           一次性：下載模型 → 修剪詞表 → int8
 skills/
   genie-explain/           聽不懂：只重講卡住的點，詞全部註解，比喻 ≤3 句
@@ -308,8 +311,10 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main &&
 Codex: **re-run the install line above**. It fetches the latest `update.sh` first. Upstream history was rewritten once (2026-10-19), so `git pull` fails on old installs; this line handles it: with no local edits it moves to the latest version and keeps the old one on a `genie-before-update-*` branch; with local edits it stops and changes nothing.
 
 ```bash
-claude plugin marketplace update genie-harness && claude plugin update genie-harness@genie-harness   # Claude Code
+claude plugin marketplace update genie-harness && python3 "$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.claude/plugins/known_marketplaces.json')))['genie-harness']['installLocation'])")/router/safe_update.py"   # Claude Code
 ```
+
+Claude Code's own `claude plugin update` deletes the old version, so hooks in sessions that are still open lose their files and block every tool. `safe_update.py` backs it up, updates every scope (user and each project) together, lets open sessions keep the old version, and removes it once no session started before the update is left.
 
 Restart Codex / Claude Code afterwards. The model is not downloaded again; prefs (`~/.genie/`) are kept.
 
@@ -489,9 +494,10 @@ router/
   decide_gate.py           PreToolUse(AskUserQuestion): reversible with a recommendation → do it; irreversible without one → re-ask
   fail_streak.py           PostToolUse(Failure): same command or file fails twice → stop, re-read, rule out alternatives
   blame_gate.py            Stop (Claude Code only): blames model or timeout with no alternative cause → block once
+  safe_update.py           Claude Code update: every scope at once, old version kept for open sessions
   selftest.py              SessionStart self-check, silent when healthy
   eval_set.json            102 hand-written dev cases (NOT a benchmark)
-  test_*.py                11 self-checks, all must PASS
+  test_*.py                14 self-checks, all must PASS
   setup_model.py           one-time: download model → trim vocab → int8
 skills/
   genie-explain/           lost: re-explain only the stuck point, every term glossed, analogy ≤3 sentences

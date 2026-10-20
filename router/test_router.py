@@ -181,9 +181,26 @@ def test_update_genie_runs_the_real_command(fails):
     repo = os.path.dirname(HERE)
     if "show FETCH_HEAD:update.sh" not in codex or repo not in codex or "pull --ff-only" in codex:
         fails.append("update_genie codex: wrong command: %r" % codex)
-    claude = r.dispatch("update_genie", {}, "claude")
-    if "claude plugin update genie-harness@genie-harness" not in claude or "Claude Code" not in claude:
-        fails.append("update_genie claude: wrong command: %r" % claude)
+    # Claude Code: marketplace known -> its safe_update.py (keeps the old version
+    # for running sessions), plain update as the fallback; unknown -> plain update.
+    home = os.environ.get("HOME")
+    with tempfile.TemporaryDirectory() as t:
+        os.environ["HOME"] = t
+        try:
+            plain = r.dispatch("update_genie", {}, "claude")
+            os.makedirs(os.path.join(t, ".claude", "plugins"))
+            with open(os.path.join(t, ".claude", "plugins", "known_marketplaces.json"), "w") as fh:
+                json.dump({"genie-harness": {"installLocation": "/mkt/genie"}}, fh)
+            safe = r.dispatch("update_genie", {}, "claude")
+        finally:
+            os.environ["HOME"] = home
+    for claude in (plain, safe):
+        if "claude plugin update genie-harness@genie-harness" not in claude or "Claude Code" not in claude:
+            fails.append("update_genie claude: wrong command: %r" % claude)
+    if "python3 /mkt/genie/router/safe_update.py genie-harness@genie-harness" not in safe:
+        fails.append("update_genie claude: marketplace known but no safe_update: %r" % safe)
+    if "safe_update" in plain:
+        fails.append("update_genie claude: safe_update without a known marketplace: %r" % plain)
 
 
 def test_options_are_not_padded(fails):

@@ -518,10 +518,22 @@ def update_cmd(host):
     """The update command for this install. Codex runs the router from its own
     checkout, so the parent of HERE is the directory to update. The latest
     update.sh is fetched and run, never the local copy: an old copy cannot
-    cross a rewritten history (README, Update)."""
+    cross a rewritten history (README, Update).
+    Claude Code: refresh the marketplace, then run its (now latest)
+    safe_update.py, which keeps the old version for sessions still running it.
+    Falls back to the plain update when the marketplace copy has no such file."""
     if host == "claude":
+        plain = "claude plugin update genie-harness@genie-harness"
+        try:
+            with open(os.path.expanduser("~/.claude/plugins/known_marketplaces.json"),
+                      encoding="utf-8") as fh:
+                loc = json.load(fh)["genie-harness"]["installLocation"]
+        except (OSError, ValueError, KeyError, TypeError):
+            return "claude plugin marketplace update genie-harness && " + plain
+        f = shlex.quote(os.path.join(loc, "router", "safe_update.py"))
         return ("claude plugin marketplace update genie-harness && "
-                "claude plugin update genie-harness@genie-harness")
+                "if [ -f %s ]; then python3 %s genie-harness@genie-harness; else %s; fi"
+                % (f, f, plain))
     d = shlex.quote(os.path.dirname(HERE))
     return ("git -C %s fetch -q origin main && bash <(git -C %s show FETCH_HEAD:update.sh) %s"
             % (d, d, d))

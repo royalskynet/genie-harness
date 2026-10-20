@@ -23,10 +23,21 @@ def ask(question, *options, multi=False):
                                           "multiSelect": multi, "options": opts}]}}
 
 
+LOG = os.path.join(tempfile.mkdtemp(), "decide.log")
+
+
 def run(payload):
     raw = payload if isinstance(payload, str) else json.dumps(payload)
     return subprocess.run([sys.executable, GATE], input=raw, capture_output=True,
-                          text=True, cwd=tempfile.gettempdir())
+                          text=True, cwd=tempfile.gettempdir(),
+                          env=dict(os.environ, GENIE_DECIDE_LOG=LOG))
+
+
+def log_lines():
+    if not os.path.exists(LOG):
+        return []
+    with open(LOG, encoding="utf-8") as fh:
+        return [json.loads(l) for l in fh if l.strip()]
 
 
 MUST_DENY = [
@@ -59,14 +70,25 @@ MALFORMED = ["", "not json", "{}", "[]", '{"tool_name": "AskUserQuestion"}',
 def main():
     fails = []
     for label, payload, needle in MUST_DENY:
+        before = len(log_lines())
         p = run(payload)
         try:
             out = json.loads(p.stdout)["hookSpecificOutput"]
-            ok = out["permissionDecision"] == "deny" and needle in out["permissionDecisionReason"]
+            reason = out["permissionDecisionReason"]
+            ok = out["permissionDecision"] == "deny" and needle in reason
         except (ValueError, KeyError, TypeError):
-            ok = False
+            ok, reason = False, ""
         if not ok:
             fails.append("NOT DENIED: %s -> %r" % (label, p.stdout[:120]))
+            continue
+        if not reason.startswith("Genie decide_gate: "):
+            fails.append("NO SOURCE PREFIX: %s -> %r" % (label, reason[:60]))
+        recs = log_lines()[before:]
+        kind = "take" if "instead of asking" in reason else "lint"
+        q = payload["tool_input"]["questions"][0]["question"]
+        if len(recs) != 1 or recs[0].get("kind") != kind or recs[0].get("question") != q:
+            fails.append("BAD LOG: %s -> %r" % (label, recs))
+    logged = len(log_lines())
     for label, payload in MUST_PASS:
         p = run(payload)
         if p.returncode != 0 or p.stdout.strip():
@@ -75,6 +97,8 @@ def main():
         p = run(junk)
         if p.returncode != 0 or p.stdout.strip():
             fails.append("MALFORMED NOT SAFE: %r -> %r" % (junk, p.stdout[:60]))
+    if len(log_lines()) != logged:
+        fails.append("LOGGED A PASS: %d extra lines" % (len(log_lines()) - logged))
     with open(os.path.join(HERE, "..", "claude", "hooks.json"), encoding="utf-8") as fh:
         hooks = json.load(fh)["hooks"]["PreToolUse"]
     if not any("decide_gate.py" in h["command"] and "AskUserQuestion" in m.get("matcher", "")

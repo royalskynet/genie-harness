@@ -11,6 +11,7 @@
 - **免費、本地、只用 CPU**：不接任何付費服務，不需要 GPU。
 - **你只要講話**：不用學斜線指令，Genie 每一輪替模型決定該用哪個 skill。
 - **講人話**：預設假設你沒碰過電腦，聽不懂就說「人話」「不懂」。
+- **不亂講、不亂來**：會把東西弄沒的指令直接擋。模型沒跑就說做完、引用不存在的 commit、可以自己決定卻回頭問你、把失敗推給「模型太弱」，各擋一次要它補。
 
 ```
 你打字  →  意圖路由 (0.03–0.12s, ≤63 MB RAM)  →  Codex / Claude Code  →  白話短句的回答
@@ -22,18 +23,15 @@
 
 ### 安裝
 
-**Claude Code**（在 Claude Code 裡打）：
-
-```
-/plugin marketplace add royalskynet/genie-harness
-/plugin install genie-harness@genie-harness
-```
-
-**Codex**（一行，可重複執行；已裝過就改成更新）：
+在終端機貼這一行（裝過再跑一次就是更新）：
 
 ```bash
-d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main && bash <(git -C "$d" show FETCH_HEAD:update.sh) "$d"; else git clone https://github.com/royalskynet/genie-harness "$d" && bash "$d/install.sh"; fi
+curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.sh | bash
 ```
+
+它會看你電腦上有哪個：有 `claude` 就裝 Claude Code 版，有 `codex` 就裝 Codex 版，兩個都有就都裝。只要其中一個，在最後加 `-s claude` 或 `-s codex`。
+
+也可以在 Claude Code 裡打：`/plugin marketplace add royalskynet/genie-harness`，再打 `/plugin install genie-harness@genie-harness`。
 
 - **需要**：Python 3.9+、numpy。
 - **意圖模型**：約 512 MB，處理後留 35 MB，下載一次要幾分鐘。
@@ -45,15 +43,14 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main &&
 
 ### 更新
 
-**最簡單**：直接跟 Codex 或 Claude Code 說「幫我更新 Genie」或「更新精靈到最新」，它會自己跑下面的指令。
+**最簡單**：直接跟 Codex 或 Claude Code 說「幫我更新 Genie」或「更新精靈到最新」，它會自己跑。
 
-Codex：**再跑一次上面安裝那一行**，它會先抓最新版的 `update.sh` 再更新。上游歷史在 2026-10-19 改寫過一次，舊安裝的 `git pull` 會失敗，這一行會處理：本地沒改動就對齊最新版，舊版留在 `genie-before-update-*` 分支；有改動就停下來不動。
+自己跑也一樣，**再貼一次安裝那一行**。
 
-```bash
-claude plugin marketplace update genie-harness && python3 "$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.claude/plugins/known_marketplaces.json')))['genie-harness']['installLocation'])")/router/safe_update.py"   # Claude Code
-```
+- **Claude Code**：不走原生的 `claude plugin update`。原生更新會刪掉舊版，開著的 session 的 hook 會找不到檔、擋下每個工具。`router/safe_update.py` 先備份，所有 scope（user 和各專案）一起升，開著的 session 繼續用舊版，等沒有 session 在用了才清掉。
+- **Codex**：上游歷史在 2026-10-19 改寫過一次，舊安裝的 `git pull` 會失敗。這一行會處理：本地沒改動就對齊最新版，舊版留在 `genie-before-update-*` 分支；有改動就停下來不動。
 
-Claude Code 原生的 `claude plugin update` 會刪掉舊版，開著的 session 的 hook 會找不到檔、擋下每個工具。`safe_update.py` 先備份，所有 scope（user 和各專案）一起升，開著的 session 繼續用舊版，等沒有 session 在用了才清掉。
+每一版改了什麼，看 [CHANGELOG.md](CHANGELOG.md)。
 
 更新完重開 Codex／Claude Code 才生效。模型不會重新下載，偏好設定（`~/.genie/`）會保留。
 
@@ -243,6 +240,7 @@ skills/
   genie-execute/           可逆的一口氣做完，停在不可逆那步前面
   genie-humanizer/         講人話：短句單義、先講結論
   genie-terms/             一次一個詞的白話百科；beginner 的雞婆註解
+get.sh                                 一行安裝／更新（偵測 claude、codex）
 hooks.json / install.sh / update.sh    Codex 用
 .claude-plugin/ / claude/              Claude Code plugin
 opencode/                              genie-dedup.js
@@ -272,6 +270,7 @@ Make [Codex CLI](https://github.com/openai/codex) and [Claude Code](https://clau
 - **Free, local, CPU-only**: no paid services, no GPU.
 - **You just talk**: no slash commands to learn; Genie tells the model which skill to run each turn.
 - **Plain language**: by default it assumes you have never used a computer. Lost? Say "plain words" or "I don't get it".
+- **No bluffing, no wrecking**: commands that destroy things are blocked. Claiming done without running anything, citing a commit that doesn't exist, asking you what it could decide itself, or blaming "the model is too weak" each get blocked once until fixed.
 
 ```
 You type  →  Intent router (0.03–0.12s, ≤63 MB RAM)  →  Codex / Claude Code  →  plain-language short answers
@@ -283,18 +282,15 @@ You type  →  Intent router (0.03–0.12s, ≤63 MB RAM)  →  Codex / Claude C
 
 ### Install
 
-**Claude Code** (type inside Claude Code):
-
-```
-/plugin marketplace add royalskynet/genie-harness
-/plugin install genie-harness@genie-harness
-```
-
-**Codex** (one line, safe to re-run; updates if already installed):
+Paste this one line in a terminal (run it again later to update):
 
 ```bash
-d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main && bash <(git -C "$d" show FETCH_HEAD:update.sh) "$d"; else git clone https://github.com/royalskynet/genie-harness "$d" && bash "$d/install.sh"; fi
+curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.sh | bash
 ```
+
+It looks at what you have: `claude` gets the Claude Code plugin, `codex` gets the Codex install, both get both. For only one, add `-s claude` or `-s codex` at the end.
+
+Or inside Claude Code: `/plugin marketplace add royalskynet/genie-harness`, then `/plugin install genie-harness@genie-harness`.
 
 - **Needs**: Python 3.9+, numpy.
 - **Intent model**: ~512 MB, 35 MB after processing, a few minutes to download once.
@@ -306,15 +302,14 @@ d=~/genie-harness; if [ -d "$d/.git" ]; then git -C "$d" fetch -q origin main &&
 
 ### Update
 
-**Easiest**: tell Codex or Claude Code "update Genie" (or "upgrade genie to latest"). It runs the commands below itself.
+**Easiest**: tell Codex or Claude Code "update Genie" (or "upgrade genie to latest"). It runs the update itself.
 
-Codex: **re-run the install line above**. It fetches the latest `update.sh` first. Upstream history was rewritten once (2026-10-19), so `git pull` fails on old installs; this line handles it: with no local edits it moves to the latest version and keeps the old one on a `genie-before-update-*` branch; with local edits it stops and changes nothing.
+By hand, **paste the install line again**.
 
-```bash
-claude plugin marketplace update genie-harness && python3 "$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.claude/plugins/known_marketplaces.json')))['genie-harness']['installLocation'])")/router/safe_update.py"   # Claude Code
-```
+- **Claude Code**: it skips the native `claude plugin update`, which deletes the old version so hooks in sessions still open lose their files and block every tool. `router/safe_update.py` backs it up, updates every scope (user and each project) together, lets open sessions keep the old version, and removes it once no session started before the update is left.
+- **Codex**: upstream history was rewritten once (2026-10-19), so `git pull` fails on old installs. The line handles it: with no local edits it moves to the latest version and keeps the old one on a `genie-before-update-*` branch; with local edits it stops and changes nothing.
 
-Claude Code's own `claude plugin update` deletes the old version, so hooks in sessions that are still open lose their files and block every tool. `safe_update.py` backs it up, updates every scope (user and each project) together, lets open sessions keep the old version, and removes it once no session started before the update is left.
+What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 Restart Codex / Claude Code afterwards. The model is not downloaded again; prefs (`~/.genie/`) are kept.
 
@@ -504,6 +499,7 @@ skills/
   genie-execute/           do the reversible steps in one go, stop before the irreversible one
   genie-humanizer/         plain language: one reading per sentence, answer first
   genie-terms/             one-term plain glossary; beginner's gloss-everything mode
+get.sh                                 one-line install/update (detects claude, codex)
 hooks.json / install.sh / update.sh    Codex
 .claude-plugin/ / claude/              Claude Code plugin
 opencode/                              genie-dedup.js

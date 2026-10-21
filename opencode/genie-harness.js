@@ -36,70 +36,98 @@ function lastUserText(messages) {
   return ""
 }
 
-// opencode 1.19 loads only `export default { id, server }`; it rejects the V2
-// `{ id, setup }` shape ("must default export an object with server()").
-// chat.message carries the user's text; system.transform has no messages, so
-// the router output is computed once per user message and replayed each step.
-export default {
-  id: "genie-harness",
-  server: async ({ directory } = {}) => {
-    const injected = new Map() // sessionID -> system strings for the latest user message
+// Both plugin APIs are exported from one module: opencode-ai 1.x (1.19 strict)
+// calls `server` and rejects a module without it; @opencode/cli 2.x calls
+// `setup`. Each ignores the other key (probed on 1.19.3 and 2.1.2).
 
-    return {
-      "chat.message": async (input, output) => {
-        const sessionID = input?.sessionID
-        if (!sessionID) return
-        try {
-          const text = lastUserText([{ info: { role: "user" }, parts: output?.parts }])
-          if (!text) return
-          // One hook call: the router's additionalContext already carries the
-          // turn's prefs (prefs.py); `--host codex` renders them every turn.
-          const hookInput = JSON.stringify({ prompt: text, cwd: directory ?? process.cwd(), session_id: sessionID })
-          const routerResult = await runGenieScript("genie_router.py", hookInput, ["--host", "codex"])
-          let context = ""
-          try {
-            context = JSON.parse(routerResult.stdout).hookSpecificOutput?.additionalContext ?? ""
-          } catch {
-            // Unparseable router output is dropped; the turn runs without it.
-          }
-          const system = context ? [context] : []
-          if (injected.size >= 200) injected.delete(injected.keys().next().value)
-          injected.set(sessionID, system)
-        } catch {
-          // Routing and preferences fail open; neither may block a model turn.
-        }
-      },
-
-      "experimental.chat.system.transform": async (input, output) => {
-        const system = injected.get(input?.sessionID)
-        if (system?.length && Array.isArray(output?.system)) output.system.push(...system)
-      },
-
-      "tool.execute.before": async (input, output) => {
-        if (!["bash", "write", "edit", "patch"].includes(input?.tool)) return
-        try {
-          const args = output?.args
-          const toolInput = args && typeof args === "object" ? { ...args } : args
-          if (toolInput?.filePath && !toolInput.file_path) toolInput.file_path = toolInput.filePath
-          const guardInput = JSON.stringify({ tool_input: toolInput, cwd: directory ?? process.cwd() })
-          const guardResult = await runGenieScript("guard_dangerous.py", guardInput)
-          if (!guardResult.stdout) return
-
-          let guardData
-          try {
-            guardData = JSON.parse(guardResult.stdout)
-          } catch {
-            return
-          }
-          const decision = guardData.hookSpecificOutput
-          if (decision?.permissionDecision === "deny") {
-            throw new Error(`genie-guard: ${decision.permissionDecisionReason}`)
-          }
-        } catch (error) {
-          if (error.message?.includes("genie-guard")) throw error
-          // Guard failures fail open rather than breaking ordinary tool use.
-        }
-      },
-    }
-  },
+// One hook call: the router's additionalContext already carries the turn's
+// prefs (prefs.py); `--host codex` renders them every turn.
+async function routerContext(text, cwd, sessionID) {
+  const hookInput = JSON.stringify({ prompt: text, cwd, session_id: sessionID })
+  const routerResult = await runGenieScript("genie_router.py", hookInput, ["--host", "codex"])
+  try {
+    return JSON.parse(routerResult.stdout).hookSpecificOutput?.additionalContext ?? ""
+  } catch {
+    return "" // Unparseable router output is dropped; the turn runs without it.
+  }
 }
+
+// Throws `genie-guard: ...` to block; any other failure fails open.
+async function guardTool(tool, input, cwd) {
+  if (!["bash", "write", "edit", "patch"].includes(tool)) return
+  try {
+    const toolInput = input && typeof input === "object" ? { ...input } : input
+    if (toolInput?.filePath && !toolInput.file_path) toolInput.file_path = toolInput.filePath
+    const guardResult = await runGenieScript("guard_dangerous.py", JSON.stringify({ tool_input: toolInput, cwd }))
+    if (!guardResult.stdout) return
+
+    let guardData
+    try {
+      guardData = JSON.parse(guardResult.stdout)
+    } catch {
+      return
+    }
+    const decision = guardData.hookSpecificOutput
+    if (decision?.permissionDecision === "deny") {
+      throw new Error(`genie-guard: ${decision.permissionDecisionReason}`)
+    }
+  } catch (error) {
+    if (error.message?.includes("genie-guard")) throw error
+    // Guard failures fail open rather than breaking ordinary tool use.
+  }
+}
+
+// V1 hooks (1.x). chat.message carries the user's text; system.transform has
+// no messages, so the router runs once per user message and is replayed each step.
+async function server({ directory } = {}) {
+  const cwd = directory ?? process.cwd()
+  const injected = new Map() // sessionID -> router context for the latest user message
+
+  return {
+    "chat.message": async (input, output) => {
+      const sessionID = input?.sessionID
+      if (!sessionID) return
+      try {
+        const text = lastUserText([{ info: { role: "user" }, parts: output?.parts }])
+        if (!text) return
+        const context = await routerContext(text, cwd, sessionID)
+        if (injected.size >= 200) injected.delete(injected.keys().next().value)
+        injected.set(sessionID, context)
+      } catch {
+        // Routing and preferences fail open; neither may block a model turn.
+      }
+    },
+
+    "experimental.chat.system.transform": async (input, output) => {
+      const context = injected.get(input?.sessionID)
+      if (context && Array.isArray(output?.system)) output.system.push(context)
+    },
+
+    "tool.execute.before": async (input, output) => {
+      await guardTool(input?.tool, output?.args, cwd)
+    },
+  }
+}
+
+// V2 hooks (2.x): the context event carries messages and system blocks.
+async function setup(ctx) {
+  const cwd = () => ctx.location?.directory ?? process.cwd()
+
+  await ctx.session.hook("context", async (event) => {
+    if (!event.sessionID) return
+    try {
+      const text = lastUserText(event.messages)
+      if (!text) return
+      const context = await routerContext(text, cwd(), event.sessionID)
+      if (context) event.system.push({ type: "text", text: context })
+    } catch {
+      // Routing and preferences fail open; neither may block a model turn.
+    }
+  })
+
+  await ctx.tool.hook("execute.before", async (event) => {
+    await guardTool(event.tool, event.input, cwd())
+  })
+}
+
+export default { id: "genie-harness", server, setup }

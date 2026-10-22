@@ -13,6 +13,8 @@ import json
 import re
 import sys
 
+import defer
+
 EDIT_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 REASON = ("You changed files but ran nothing after the last change. Run it once "
           "and show the real output, or say plainly why it cannot be run.")
@@ -171,17 +173,24 @@ def needs_run(path):
     return pending
 
 
+def emit(data, reason):
+    """Hand the note to the next turn (defer.py); block only when that is impossible."""
+    if defer.write(data.get("session_id"), "done_gate", reason):
+        return
+    json.dump({"decision": "block", "reason": reason}, sys.stdout)
+
+
 def main():
     try:
         data = json.loads(sys.stdin.read() or "{}")
         if data.get("stop_hook_active") or not data.get("transcript_path"):
             return
         if needs_run(data["transcript_path"]):
-            json.dump({"decision": "block", "reason": REASON}, sys.stdout)
+            emit(data, REASON)
             return
         ids = invented_ids(data["transcript_path"], data.get("last_assistant_message"))
         if ids:
-            json.dump({"decision": "block", "reason": ID_REASON % ", ".join(ids[:5])}, sys.stdout)
+            emit(data, ID_REASON % ", ".join(ids[:5]))
     except Exception:
         return  # fail open
 

@@ -40,6 +40,8 @@ import time
 import unicodedata
 from datetime import datetime, timezone
 
+import defer
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 # install.sh puts the model in the checkout; the Claude Code plugin puts it in
 # ~/.genie/model, because the plugin directory is replaced on every update.
@@ -749,7 +751,15 @@ def main():
     if argv[:1] == ["--host"] and len(argv) > 1:
         host, argv = argv[1], argv[2:]
     if not argv:
-        ctx = hook(sys.stdin.read(), host)
+        raw = sys.stdin.read()
+        ctx = hook(raw, host)
+        # Notes the Stop gates deferred last turn (defer.py) ride in front of the tag.
+        try:
+            note = defer.drain(json.loads(raw).get("session_id"))
+        except Exception:
+            note = ""
+        if note:
+            ctx = note + ("\n" + ctx if ctx else "")
         if ctx:
             json.dump({"hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit",

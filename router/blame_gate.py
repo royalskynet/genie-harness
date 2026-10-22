@@ -16,6 +16,8 @@ import json
 import re
 import sys
 
+import defer
+
 SUBJ = r"(?:模型|model|LLM|timeout|time\s*out|timed\s+out|逾時|超時|太慢)"
 BLAME = re.compile("|".join([
     r"(?:是|因為|原因(?:是|在)|歸因(?:於|到)|卡在|怪)\s*(?:這個|那個|免費|弱)?" + SUBJ,
@@ -68,7 +70,9 @@ def main():
         if text is None and data.get("transcript_path"):
             text = last_text(data["transcript_path"])
         if blames(text):
-            json.dump({"decision": "block", "reason": REASON}, sys.stdout)
+            # Deferred to the next turn when a session id exists (defer.py); block otherwise.
+            if not defer.write(data.get("session_id"), "blame_gate", REASON):
+                json.dump({"decision": "block", "reason": REASON}, sys.stdout)
     except Exception:
         return  # fail open
 

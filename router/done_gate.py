@@ -6,7 +6,7 @@
 2. The final reply cites a commit hash or a GitHub issue/PR URL that appears in
    no tool output and no user message this session (an invented result).
 
-Exempt: .md/.txt edits, `stop_hook_active` re-entry, earlier turns.
+Exempt: .md/.txt and data-file (.json/.jsonl/.yml/.yaml/.csv) edits, `stop_hook_active` re-entry, earlier turns.
 Fails OPEN like guard_dangerous.py. Claude Code only (Codex has no Stop hook here).
 """
 import json
@@ -15,6 +15,8 @@ import sys
 
 import defer
 
+# Prose and plain data files: nothing to execute, so an edit needs no run.
+NOCODE_EXT = (".md", ".txt", ".json", ".jsonl", ".yml", ".yaml", ".csv")
 EDIT_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 REASON = ("You changed files but ran nothing after the last change. Run it once "
           "and show the real output, or say plainly why it cannot be run.")
@@ -168,7 +170,7 @@ def needs_run(path):
             elif b.get("name") in EDIT_TOOLS:
                 inp = b.get("input") if isinstance(b.get("input"), dict) else {}
                 p = inp.get("file_path") or inp.get("notebook_path") or ""
-                if not str(p).lower().endswith((".md", ".txt")):
+                if not str(p).lower().endswith(NOCODE_EXT):
                     pending = True  # unknown path counts as code
     return pending
 

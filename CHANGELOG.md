@@ -2,8 +2,10 @@
 
 每一版改了什麼。最新的在最上面。 · What changed in each version, newest first.
 
-## 未發版 · Unreleased
+## 0.5.4 — 2026-10-23
 
+- 收尾閘（Stop gate）的提醒改到下一輪才注入，不再擋住回覆。 · Stop-gate notes are deferred to the next turn instead of blocking the reply (#27).
+- 只改 `.json`／`.jsonl`／`.yml`／`.yaml`／`.csv` 這類資料檔，不再被判「改了檔卻沒跑」。 · Editing only data files (`.json`, `.jsonl`, `.yml`, `.yaml`, `.csv`) no longer triggers "changed files but ran nothing" (#28).
 - `get.sh` 分兩種用法：
   - **一般**（`| bash`）：Genie 沒裝就裝、有新版就更新、最新就跳過；附加元件（wheel、fixindex、ponytail）沒裝的一個一個問，已裝的不動。
   - **完整安裝**（`| bash -s -- --all`）：沒裝的全部裝、不問；已裝的有新版先問要不要更新，最新就跳過。

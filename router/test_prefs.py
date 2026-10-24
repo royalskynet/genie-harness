@@ -212,6 +212,17 @@ def test_resolve_never_raises(fails):
             fails.append("resolve(%r) raised %r" % (p, e))
 
 
+def test_block_hints_only_for_blocks_not_off(fails):
+    """AGENTS.md no longer carries the block table, so the hint for an `auto` block
+    must arrive in prefs, and an `off` block must cost nothing."""
+    beg = prefs.render_context(prefs.resolve("hello", persist=False, data=prefs._blank({})))
+    eq("terms: gloss" in beg, True, "beginner (terms=auto) gets the terms hint", fails)
+    data = prefs._blank({"level": "expert", "blocks": {"terms": "off", "examples": "off"}})
+    exp = prefs.render_context(prefs.resolve("hello", persist=False, data=data))
+    eq("terms: gloss" in exp, False, "terms=off sends no terms hint", fails)
+    eq("examples: one concrete" in exp, False, "examples=off sends no examples hint", fails)
+
+
 def test_context_mentions_the_boundary(fails):
     """The injected context must state the non-negotiable part out loud. Only the
     rules the model itself carries out count: the command gate and the host's

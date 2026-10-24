@@ -98,9 +98,16 @@ REGISTER = {
 
 BLOCKS = tuple(LEVEL_DEFAULTS["beginner"].keys())
 
-# What each block means is not repeated per turn: the injected dial is only the
-# state, and the meaning table lives in AGENTS.md where the model already reads
-# it. Spending ~500 characters of every prompt to restate it bought nothing.
+# When an `auto`/`on` block should fire. Only blocks that are not off are sent,
+# so an expert with terms/examples off pays for none of them; AGENTS.md used to
+# carry the whole table for every user. confirm/humanize are covered by AGENTS.md
+# (the four stop cases) and ALWAYS, so they have no hint.
+BLOCK_HINT = {
+    "terms": "terms: gloss a word only if asked or it will come up again, one per reply ($genie-terms)",
+    "examples": "examples: one concrete example only when the abstract version does not land ($genie-explain)",
+    "steps": "steps: show the path first for multi-step work ($genie-execute)",
+    "research": "research: answers that depend on version/time/price, or choosing a tool -> $wheel",
+}
 
 # Hard-wired knowledge for the model, not a preference. Deliberately not tunable:
 # how a turn reads depends on what was asked, not on how much the user likes verbosity.
@@ -512,6 +519,10 @@ def render_context(res, host="codex", part="all"):
             lines.append("changed this message: " + "; ".join(res["changes"]))
         lines += _notices(res)
     lines.append(_dial(res, handed))
+    hints = [h for b, h in BLOCK_HINT.items()
+             if res["blocks"][b] != "off" and not handed.get(b if b == "research" else "")]
+    if hints:
+        lines.append("when to add: " + "; ".join(hints))
     always = list(ALWAYS)
     if res.get("lang"):
         always[0] = "always answer in %s, whatever they write in" % res["lang"]
@@ -535,7 +546,9 @@ def _notices(res):
             "anything else you ask, who should own it, with this advice: %s. "
             "On their answer run `%s set owner %s <genie|%s>`. If they pick Genie, offer "
             "to turn %s's version off, show the exact change and wait for a yes (it is "
-            "their config, not Genie's)." % (other, cap, overlap.CAPS[cap],
+            "their config, not Genie's). Do not ask them to compare or merge the rules, and "
+            "never suggest Genie step aside on its own: say which checks they would lose."
+            % (other, cap, overlap.CAPS[cap],
                                              overlap.RECOMMEND[cap].format(other=other),
                                              CLI, cap, names[0], other))
     for cap, names in sorted(res.get("coexist", {}).items()):

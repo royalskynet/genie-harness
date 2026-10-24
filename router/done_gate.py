@@ -184,7 +184,7 @@ def emit(data, reason):
 
 def main():
     try:
-        data = json.loads(sys.stdin.read() or "{}")
+        data = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
         if data.get("stop_hook_active") or not data.get("transcript_path"):
             return
         if needs_run(data["transcript_path"]):

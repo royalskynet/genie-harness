@@ -96,7 +96,7 @@ def log_deny(kind, questions):
 
 def main():
     try:
-        data = json.loads(sys.stdin.read() or "{}")
+        data = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
         if not isinstance(data, dict) or data.get("tool_name") != "AskUserQuestion":
             return
         questions = (data.get("tool_input") or {}).get("questions") or []

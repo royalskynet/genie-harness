@@ -751,7 +751,7 @@ def main():
     if argv[:1] == ["--host"] and len(argv) > 1:
         host, argv = argv[1], argv[2:]
     if not argv:
-        raw = sys.stdin.read()
+        raw = sys.stdin.buffer.read().decode("utf-8", "replace")
         ctx = hook(raw, host)
         # Notes the Stop gates deferred last turn (defer.py) ride in front of the tag.
         try:
@@ -766,7 +766,7 @@ def main():
                 "additionalContext": ctx,
             }}, sys.stdout)
         return
-    text = sys.stdin.read() if argv[0] == "--text" else " ".join(argv)
+    text = sys.stdin.buffer.read().decode("utf-8", "replace") if argv[0] == "--text" else " ".join(argv)
     intent, score, why = classify(text)
     conf = confidence(intent, score, why)
     if os.environ.get("GENIE_DEBUG"):

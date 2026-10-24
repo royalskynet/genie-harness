@@ -142,7 +142,7 @@ def _cleanup_old_files(state_dir):
 
 def main():
     try:
-        raw = sys.stdin.read() or "{}"
+        raw = sys.stdin.buffer.read().decode("utf-8", "replace") or "{}"
         data = json.loads(raw)
     except Exception:
         return  # fail open

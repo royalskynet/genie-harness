@@ -153,6 +153,12 @@ def test_dispatch(fails):
         fails.append("dispatch: claude host must name the user-level wheel, not the removed plugin skill")
     if "genie-harness:genie-execute" not in r.dispatch("execute_request", on, "claude"):
         fails.append("dispatch: claude host must name the namespaced genie-* plugin skills")
+    for blocks in ({"research": "on"}, {"research": "off"}):
+        if "$genie-fix" not in r.dispatch("fix_request", {"blocks": blocks}, "codex"):
+            fails.append("dispatch fix_request (%s): must name $genie-fix" % blocks)
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if not os.path.isfile(os.path.join(repo, "skills", "genie-fix", "SKILL.md")):
+        fails.append("skills/genie-fix/SKILL.md missing: fix_request DO names a skill that does not exist")
     for intent in ("clear_request", "teach_me", "risky_action", "continue"):
         if "wheel" in r.dispatch(intent, on, "codex"):
             fails.append("dispatch %s: wheel where it is not wanted" % intent)

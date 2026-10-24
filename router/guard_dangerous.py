@@ -656,7 +656,7 @@ def main():
     if _handed_off():
         return
     try:
-        data = json.loads(sys.stdin.read() or "{}")
+        data = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
         tool_input = data.get("tool_input")
         if not isinstance(tool_input, dict):
             return

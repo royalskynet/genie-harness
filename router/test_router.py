@@ -736,6 +736,19 @@ def test_long_session_reminder(fails):
             r.INTENTS["threshold"] = saved_threshold
 
 
+def test_hook_stdin_is_utf8(fails):
+    """Hosts send UTF-8 JSON. On Windows Python's stdin defaults to the ANSI
+    code page (cp950), so every CJK prompt arrived as mojibake and routed to
+    unsure. Feed raw UTF-8 bytes with a non-UTF-8 locale and expect the tag."""
+    import subprocess
+    env = dict(os.environ, PYTHONUTF8="0", PYTHONIOENCODING="cp950")
+    p = subprocess.run([sys.executable, os.path.join(HERE, "genie_router.py")],
+                       input=json.dumps({"prompt": "幫我把專案跑起來"}, ensure_ascii=False).encode("utf-8"),
+                       capture_output=True, env=env)
+    if b"intent=execute_request" not in p.stdout:
+        fails.append("hook stdin not read as UTF-8: %r" % p.stdout[:80])
+
+
 def main():
     fails = []
     # 10-18: 128 of 344 paid judge calls were these fixtures; the guard must fail loud.
@@ -751,6 +764,7 @@ def main():
     test_long_regex_hit_is_a_guess(fails)
     test_machine_turns_are_not_classified(fails)
     test_bad_envelope_is_not_a_prompt(fails)
+    test_hook_stdin_is_utf8(fails)
     test_wheel_asks_are_sure(fails)
     test_embedding_fix_is_a_guess(fails)
     test_do_follows_blocks(fails)

@@ -152,7 +152,7 @@ def hook(raw):
 
 def main():
     try:
-        out = hook(sys.stdin.read())
+        out = hook(sys.stdin.buffer.read().decode("utf-8", "replace"))
     except Exception:
         out = ""  # fail open
     if out:

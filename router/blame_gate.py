@@ -63,7 +63,7 @@ def last_text(path):
 
 def main():
     try:
-        data = json.loads(sys.stdin.read() or "{}")
+        data = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
         if not isinstance(data, dict) or data.get("stop_hook_active"):
             return
         text = data.get("last_assistant_message")

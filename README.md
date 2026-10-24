@@ -171,7 +171,7 @@ Genie 先在本地判斷你這句話是什麼意圖，再用一行 `DO:` 告訴�
 - **PostToolUse／PostToolUseFailure**：`Bash|Edit|Write|MultiEdit|NotebookEdit` 跑連敗閘。
 - **Stop**：完成閘。
 
-四個 skill 以 `genie-harness:<名稱>` 出現；`wheel` 在本 repo 外（`royalskynet/wheel-it`）。移除：`/plugin uninstall genie-harness`。
+五個 skill 以 `genie-harness:<名稱>` 出現；`wheel` 在本 repo 外（`royalskynet/wheel-it`）。移除：`/plugin uninstall genie-harness`。
 
 </details>
 
@@ -180,7 +180,7 @@ Genie 先在本地判斷你這句話是什麼意圖，再用一行 `DO:` 告訴�
 
 重跑時保留第一次的 `*.bak-genie` 備份，既有備份不會被覆蓋。
 
-- **`~/.agents/skills/{genie-*,wheel}`**：4 個 symlink 指回本 repo 的 `skills/`；`wheel` 指到 `~/dev/wheel`（`royalskynet/wheel-it` 的 clone，`GENIE_WHEEL_UPSTREAM` 可改）。全新安裝時那個 clone 不存在，安裝器印 `skipping wheel` 後繼續；只有原本已有 `wheel` 連結、clone 卻不見時才以「refusing」停下，避免把能用的連結指到空處。
+- **`~/.agents/skills/{genie-*,wheel}`**：5 個 symlink 指回本 repo 的 `skills/`；`wheel` 指到 `~/dev/wheel`（`royalskynet/wheel-it` 的 clone，`GENIE_WHEEL_UPSTREAM` 可改）。全新安裝時那個 clone 不存在，安裝器印 `skipping wheel` 後繼續；只有原本已有 `wheel` 連結、clone 卻不見時才以「refusing」停下，避免把能用的連結指到空處。
 - **`~/.codex/hooks.json`**：新增或更新 `UserPromptSubmit`（router）與 `PreToolUse`（guard），其他 hook 保留。復原：`mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json`。
 - **`~/.codex/config.toml`**：新增或更新 hook 的 `trusted_hash`。復原：`mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml`。
 - **`~/.codex/AGENTS.md`**：只管 `<!-- genie-harness -->` 標記內的區塊，每次安裝或更新都換成最新版；標記外你自己寫的內容不動。復原：`mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md`。
@@ -190,7 +190,7 @@ Genie 先在本地判斷你這句話是什麼意圖，再用一行 `DO:` 告訴�
 移除技能連結並還原備份：
 
 ```bash
-for name in genie-execute genie-explain genie-humanizer genie-terms wheel; do
+for name in genie-execute genie-explain genie-fix genie-humanizer genie-terms wheel; do
   link="$HOME/.agents/skills/$name"
   backup="$link.bak-genie"
   if [ -L "$link" ] && [[ "$(readlink "$link")" == */genie-harness/skills/"$name" || "$name" == wheel ]]; then rm "$link"; fi
@@ -253,6 +253,7 @@ router/
   setup_model.py           一次性：下載模型 → 修剪詞表 → int8
 skills/
   genie-explain/           聽不懂：只重講卡住的點，詞全部註解，比喻 ≤3 句
+  genie-fix/               壞了：重現→根因→同類掃描→根治＋回歸檢查→驗收
   genie-execute/           可逆的一口氣做完，停在不可逆那步前面
   genie-humanizer/         講人話：短句單義、先講結論
   genie-terms/             一次一個詞的白話百科；beginner 的雞婆註解
@@ -446,7 +447,7 @@ The one exception: handing `guard` to another command guard that is actually ins
 - **PostToolUse / PostToolUseFailure**: fail-streak gate on `Bash|Edit|Write|MultiEdit|NotebookEdit`.
 - **Stop**: done gate.
 
-Four skills appear as `genie-harness:<name>`; `wheel` lives outside this repo (`royalskynet/wheel-it`). Remove with `/plugin uninstall genie-harness`.
+Five skills appear as `genie-harness:<name>`; `wheel` lives outside this repo (`royalskynet/wheel-it`). Remove with `/plugin uninstall genie-harness`.
 
 </details>
 
@@ -455,7 +456,7 @@ Four skills appear as `genie-harness:<name>`; `wheel` lives outside this repo (`
 
 Re-runs keep the first `*.bak-genie` backup; an existing backup is never overwritten.
 
-- **`~/.agents/skills/{genie-*,wheel}`**: 4 symlinks to this repo's `skills/`; `wheel` points at `~/dev/wheel` (a clone of `royalskynet/wheel-it`, override with `GENIE_WHEEL_UPSTREAM`). On a fresh install without that clone, the installer prints `skipping wheel` and continues. It stops with "refusing" only when a `wheel` link already exists but its clone is gone, so a working link is never pointed at nothing.
+- **`~/.agents/skills/{genie-*,wheel}`**: 5 symlinks to this repo's `skills/`; `wheel` points at `~/dev/wheel` (a clone of `royalskynet/wheel-it`, override with `GENIE_WHEEL_UPSTREAM`). On a fresh install without that clone, the installer prints `skipping wheel` and continues. It stops with "refusing" only when a `wheel` link already exists but its clone is gone, so a working link is never pointed at nothing.
 - **`~/.codex/hooks.json`**: adds or refreshes `UserPromptSubmit` (router) and `PreToolUse` (guard); other hooks are kept. Restore: `mv ~/.codex/hooks.json.bak-genie ~/.codex/hooks.json`.
 - **`~/.codex/config.toml`**: adds or refreshes the hooks' `trusted_hash`. Restore: `mv ~/.codex/config.toml.bak-genie ~/.codex/config.toml`.
 - **`~/.codex/AGENTS.md`**: owns only the block inside the `<!-- genie-harness -->` marker and replaces it with the latest on every install or update; your text outside the marker is left alone. Restore: `mv ~/.codex/AGENTS.md.bak-genie ~/.codex/AGENTS.md`.
@@ -465,7 +466,7 @@ Three smoke tests run before install declares done: the guard must deny `rm -rf 
 Remove the skill links and restore backups:
 
 ```bash
-for name in genie-execute genie-explain genie-humanizer genie-terms wheel; do
+for name in genie-execute genie-explain genie-fix genie-humanizer genie-terms wheel; do
   link="$HOME/.agents/skills/$name"
   backup="$link.bak-genie"
   if [ -L "$link" ] && [[ "$(readlink "$link")" == */genie-harness/skills/"$name" || "$name" == wheel ]]; then rm "$link"; fi
@@ -528,6 +529,7 @@ router/
   setup_model.py           one-time: download model → trim vocab → int8
 skills/
   genie-explain/           lost: re-explain only the stuck point, every term glossed, analogy ≤3 sentences
+  genie-fix/               broken: reproduce → root cause → same-pattern sweep → fix + regression check → verify
   genie-execute/           do the reversible steps in one go, stop before the irreversible one
   genie-humanizer/         plain language: one reading per sentence, answer first
   genie-terms/             one-term plain glossary; beginner's gloss-everything mode

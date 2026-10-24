@@ -408,9 +408,9 @@ DO = {
     "execute_request": "use {genie-execute}: do every reversible step in one go, stop only "
                        "before an irreversible one. A new dependency with 2+ candidates -> "
                        "{wheel} first.",
-    "fix_request": "something that used to work is broken. Reproduce it and read the exact "
-                   "error first. If the cause is not obvious, search the exact error text "
-                   "with {wheel}. Fix the cause, not the symptom, then rerun and paste the "
+    "fix_request": "use {genie-fix}: something that used to work is broken. Reproduce it "
+                   "and read the exact error first. If the cause is not obvious, search the "
+                   "exact error text with {wheel}. Fix the cause, not the symptom, then rerun and paste the "
                    "real output. Two failed fixes -> stop and run {wheel}; do not try a third "
                    "variant.",
     "clear_request": "just do it, run it, then say in one line what changed.",
@@ -463,8 +463,8 @@ DO_NO_WHEEL = {
                        "say how current your source is.",
     "execute_request": "use {genie-execute}: do every reversible step in one go, stop only "
                        "before an irreversible one.",
-    "fix_request": "something that used to work is broken. Reproduce it and read the exact "
-                   "error first (research is off, so no wider search). Fix the cause, not "
+    "fix_request": "use {genie-fix}: something that used to work is broken. Reproduce it "
+                   "and read the exact error first (research is off, so no wider search). Fix the cause, not "
                    "the symptom, then rerun and paste the real output. Two failed fixes -> "
                    "stop and report that instead of trying a third variant.",
     "ambiguous_request": "their goal is not clear yet. Never answer only that you cannot. "
@@ -561,7 +561,7 @@ def dispatch(intent, res, host="codex"):
             do = do.replace(" ({genie-terms} for the one key term)", "")
         if blocks.get("examples") == "off":
             do = do.replace("use {genie-explain}", "answer directly, no examples or analogies")
-    names = ("genie-execute", "genie-explain", "genie-terms")
+    names = ("genie-execute", "genie-explain", "genie-terms", "genie-fix")
     line = "DO: " + do.format(wheel=wheel, update=update_cmd(host),
                               host_name=HOST_NAME.get(host, host),
                               **{n: ref % n for n in names})

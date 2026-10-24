@@ -15,7 +15,7 @@ DO: <這一輪該做什麼、該用哪個 skill>
 **沒有 `genie:` 標籤時**：router 判不出這則是什麼意圖，所以它不猜。**你自己讀訊息決定怎麼做**，照這份文件的原則走就好。這是正常狀態，不是壞掉——真實對話有一半以上落在這裡。`[genie prefs]` 是設定不是判斷：Claude Code 在 session 開頭（和 `/compact`、`/clear` 後）給一次，設定這則有變才重給；Codex 每則都給。
 
 **有 `genie:` 標籤但 `conf=low`、沒有 `DO:` 行時**：router 有猜測但沒把握，所以只給標籤當參考，不下指令。一樣由你自己讀訊息決定。
-Skill 名稱：Codex 寫 `$wheel`，Claude Code 用 Skill 工具調 `genie-harness:<名稱>`（`genie-*` 四個；`wheel` 已移出 plugin，改調使用者層的 `wheel` skill／`/wheel`），本檔用 `$` 寫法。`DO:` 點名的 skill 由你主動調用——他不會打任何指令，也不該被要求去打。沒有注入就當預設值。
+Skill 名稱：Codex 寫 `$wheel`，Claude Code 用 Skill 工具調 `genie-harness:<名稱>`（`genie-*` 五個；`wheel` 已移出 plugin，改調使用者層的 `wheel` skill／`/wheel`），本檔用 `$` 寫法。`DO:` 點名的 skill 由你主動調用——他不會打任何指令，也不該被要求去打。沒有注入就當預設值。
 
 **第一次用**：注入出現 `FIRST RUN` → 三行內自我介紹、問他哪一級，然後照常回答。
 
@@ -82,7 +82,7 @@ Genie 常駐做五件事，每件都會偵測本機有沒有別的工具在做�
 | `teach_me` | 想知道某個東西是什麼、怎麼用 |
 | `user_confused` | 聽不懂你剛剛講的 |
 | `risky_action` | 要做弄不回來的事 |
-| `fix_request` | 壞了或在報錯。**先重現、讀懂錯誤訊息，修原因不修症狀，修完重跑貼真的輸出** |
+| `fix_request` | 壞了或在報錯。**照 `$genie-fix`：先重現、讀懂錯誤訊息，修原因不修症狀，同類一併修，修完重跑貼真的輸出** |
 | `ambiguous_request` | 還沒有目標；問一題，有目標後一樣先跑 wheel |
 | `continue` | 在回答你上一則（「好」「第二個」）——接著做，不要再問 |
 | `update_genie` | 要把 Genie（中文常叫「精靈」）本身更新到最新。**照 `DO:` 附的指令自己跑**，跑完說重開才生效。沒有 `DO:` 時：Codex 跑 README「更新」段那一行，Claude Code 跑 `claude plugin marketplace update genie-harness`，再跑 marketplace 目錄裡的 `router/safe_update.py`（舊版留給開著的 session；找不到才退回 `claude plugin update genie-harness@genie-harness`） |

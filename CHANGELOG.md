@@ -2,6 +2,10 @@
 
 每一版改了什麼。最新的在最上面。 · What changed in each version, newest first.
 
+## Unreleased
+
+- 開場注入瘦身：`AGENTS.md` 從 11.1KB 減到 3.3KB（Claude Code 開場約 4.0k → 1.5k token）。意圖表（`DO:` 已帶做法）、等級段（`register:` 已帶）、「不可關掉」段（hook 強制）、「說話」段（prefs 已帶）刪除；區塊說明改由 prefs 只送沒關掉的區塊；撞功能做法併進 `OVERLAP` 行本身。 · Slimmer startup injection: `AGENTS.md` 11.1KB -> 3.3KB (~4.0k -> 1.5k tokens on Claude Code). Content already carried by `DO:`, `register:`, hooks or prefs is gone; block hints are sent only for blocks that are not off; overlap guidance rides on the `OVERLAP` line.
+
 ## 0.5.4 — 2026-10-23
 
 - 收尾閘（Stop gate）的提醒改到下一輪才注入，不再擋住回覆。 · Stop-gate notes are deferred to the next turn instead of blocking the reply (#27).

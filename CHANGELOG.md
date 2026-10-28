@@ -2,6 +2,11 @@
 
 每一版改了什麼。最新的在最上面。 · What changed in each version, newest first.
 
+## 0.5.6 — 2026-10-28
+
+- Windows 上 hook 讀 stdin 不再被系統 ANSI code page（如 cp950）亂碼：繁中提示詞先前會被誤判成 unsure，現在一律以 UTF-8 解碼。 · Hooks now decode stdin as UTF-8 on every platform, fixing CJK prompts being mojibake-misrouted to unsure under non-UTF-8 locales like Windows cp950 (#30).
+- 五個 `genie-*` skill 瘦身。 · Slimmed the five `genie-*` skills (#34).
+
 ## 0.5.5 — 2026-10-25
 
 - 開場注入瘦身：`AGENTS.md` 從 11.1KB 減到 3.3KB（Claude Code 開場約 4.0k → 1.5k token）。意圖表（`DO:` 已帶做法）、等級段（`register:` 已帶）、「不可關掉」段（hook 強制）、「說話」段（prefs 已帶）刪除；區塊說明改由 prefs 只送沒關掉的區塊；撞功能做法併進 `OVERLAP` 行本身。 · Slimmer startup injection: `AGENTS.md` 11.1KB -> 3.3KB (~4.0k -> 1.5k tokens on Claude Code). Content already carried by `DO:`, `register:`, hooks or prefs is gone; block hints are sent only for blocks that are not off; overlap guidance rides on the `OVERLAP` line (#32).

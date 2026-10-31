@@ -2,6 +2,10 @@
 
 每一版改了什麼。最新的在最上面。 · What changed in each version, newest first.
 
+## 0.5.7 — 2026-10-31
+
+- 長 session 換新對話提醒改為預設關閉：原本 150 分鐘後每 30 分提醒 /clear，前提「長 session 會崩」來自已修好的 client 記憶體洩漏。要提醒設 `GENIE_LONG_SESSION_MIN=<分鐘>`。 · The long-session /clear reminder is now off by default; its "long sessions crash" premise came from a since-fixed client memory leak. Set `GENIE_LONG_SESSION_MIN=<minutes>` to opt in (#36).
+
 ## 0.5.6 — 2026-10-28
 
 - Windows 上 hook 讀 stdin 不再被系統 ANSI code page（如 cp950）亂碼：繁中提示詞先前會被誤判成 unsure，現在一律以 UTF-8 解碼。 · Hooks now decode stdin as UTF-8 on every platform, fixing CJK prompts being mojibake-misrouted to unsure under non-UTF-8 locales like Windows cp950 (#30).

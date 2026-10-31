@@ -52,7 +52,9 @@ INTENTS = json.load(open(os.path.join(HERE, "intents.json"), encoding="utf-8"))
 UNSURE = "unsure"
 
 # Long session reminder
-LONG_SESSION_DEFAULT_MIN = 150
+# Opt-in (0 = off). The "long sessions crash" premise came from a since-fixed
+# client memory leak; a default nag pushes /clear on users who need continuity.
+LONG_SESSION_DEFAULT_MIN = 0
 LONG_SESSION_THROTTLE_SEC = 30 * 60  # 30 minutes
 
 

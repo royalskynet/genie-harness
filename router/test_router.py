@@ -635,6 +635,26 @@ def test_long_session_reminder(fails):
             else:
                 os.environ["GENIE_STATE_DIR"] = old_state
 
+    # Test 0: default (env unset) -> off, even at 200 minutes
+    old_env0 = os.environ.pop("GENIE_LONG_SESSION_MIN", None)
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            t_path = os.path.join(d, "t.jsonl")
+            ts = (datetime.now(timezone.utc) - timedelta(minutes=200)).isoformat().replace("+00:00", "Z")
+            with open(t_path, "w", encoding="utf-8") as f:
+                f.write(_json.dumps({"type": "user", "timestamp": ts}) + "\n")
+            data = {"prompt": "繼續做下一步吧謝謝你", "session_id": "s8", "transcript_path": t_path}
+            ctx = _run_with_state(data, d)
+            if "LONG SESSION" in ctx:
+                fails.append("long session: default must be off: %r" % ctx[:200])
+    finally:
+        if old_env0 is not None:
+            os.environ["GENIE_LONG_SESSION_MIN"] = old_env0
+
+    # Tests 1-4 opt in with GENIE_LONG_SESSION_MIN=150
+    old_env150 = os.environ.get("GENIE_LONG_SESSION_MIN")
+    os.environ["GENIE_LONG_SESSION_MIN"] = "150"
+
     # Test 1: 151 minutes ago -> has LONG SESSION
     with tempfile.TemporaryDirectory() as d:
         t_path = os.path.join(d, "t.jsonl")
@@ -677,6 +697,11 @@ def test_long_session_reminder(fails):
         ctx = _run_with_state(data, d)
         if "LONG SESSION" in ctx:
             fails.append("long session: no transcript_path should not trigger: %r" % ctx[:200])
+
+    if old_env150 is None:
+        os.environ.pop("GENIE_LONG_SESSION_MIN", None)
+    else:
+        os.environ["GENIE_LONG_SESSION_MIN"] = old_env150
 
     # Test 5: GENIE_LONG_SESSION_MIN=0 -> no reminder
     old_env = os.environ.get("GENIE_LONG_SESSION_MIN")
@@ -725,9 +750,15 @@ def test_long_session_reminder(fails):
             f.write(_json.dumps({"type": "user", "timestamp": ts}) + "\n")
         data = {"prompt": "這個東西大概要怎麼辦才好", "session_id": "s15", "transcript_path": t_path}
         saved_threshold = r.INTENTS["threshold"]
+        old_env8 = os.environ.get("GENIE_LONG_SESSION_MIN")
+        os.environ["GENIE_LONG_SESSION_MIN"] = "150"
         try:
             r.INTENTS["threshold"] = 2.0  # force abstain
             ctx = _run_with_state(data, d)
+            if old_env8 is None:
+                os.environ.pop("GENIE_LONG_SESSION_MIN", None)
+            else:
+                os.environ["GENIE_LONG_SESSION_MIN"] = old_env8
             if "LONG SESSION" not in ctx:
                 fails.append("long session: should appear even when router abstains: %r" % ctx[:200])
             if "intent=" in ctx:

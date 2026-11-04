@@ -165,8 +165,8 @@ Genie 先在本地判斷你這句話是什麼意圖，再用一行 `DO:` 告訴�
 <details>
 <summary>Claude Code plugin 註冊的 hook</summary>
 
-- **SessionStart**：載入 `AGENTS.md`、第一次下載模型、跑自我檢查 `router/selftest.py`（正常時不出聲）。
-- **UserPromptSubmit**：意圖路由 `--host claude`；你貼了金鑰時提醒別複述；長 session 提醒預設關閉，設 `GENIE_LONG_SESSION_MIN=<分鐘>` 才開。
+- **SessionStart**：載入 `AGENTS.md`、第一次下載模型、跑自我檢查 `router/selftest.py`（正常時不出聲；釘了回覆語言但 Claude Code 沒設 `language` 時提醒一次）。
+- **UserPromptSubmit**：意圖路由 `--host claude`；你貼了金鑰時提醒別複述；長 session 提醒預設關閉，設 `GENIE_LONG_SESSION_MIN=<分鐘>` 才開；每 12 則訊息重送一次 prefs 規則，免得長對話裡被沖淡，`GENIE_PREFS_REFRESH=<N>` 調整、`0` 關閉。
 - **PreToolUse**：`Bash|Write|Edit|MultiEdit|NotebookEdit|Read` 跑災難指令閘；`Write|ExitPlanMode|Skill|SlashCommand|Bash` 跑輪子閘。
 - **PostToolUse／PostToolUseFailure**：`Bash|Edit|Write|MultiEdit|NotebookEdit` 跑連敗閘。
 - **Stop**：完成閘。
@@ -441,8 +441,8 @@ The one exception: handing `guard` to another command guard that is actually ins
 <details>
 <summary>Hooks the Claude Code plugin registers</summary>
 
-- **SessionStart**: loads `AGENTS.md`, fetches the model on first use, runs the self-check `router/selftest.py` (silent when healthy).
-- **UserPromptSubmit**: intent router `--host claude`; warns when you paste a key; long-session reminder is off by default; set `GENIE_LONG_SESSION_MIN=<minutes>` to enable.
+- **SessionStart**: loads `AGENTS.md`, fetches the model on first use, runs the self-check `router/selftest.py` (silent when healthy; one notice when a reply language is pinned but Claude Code's `language` setting is empty).
+- **UserPromptSubmit**: intent router `--host claude`; warns when you paste a key; long-session reminder is off by default; set `GENIE_LONG_SESSION_MIN=<minutes>` to enable; re-sends the prefs rules every 12th prompt so they do not fade in a long session (`GENIE_PREFS_REFRESH=<N>`, `0` = off).
 - **PreToolUse**: catastrophic-command gate on `Bash|Write|Edit|MultiEdit|NotebookEdit|Read`; wheel gate on `Write|ExitPlanMode|Skill|SlashCommand|Bash`.
 - **PostToolUse / PostToolUseFailure**: fail-streak gate on `Bash|Edit|Write|MultiEdit|NotebookEdit`.
 - **Stop**: done gate.

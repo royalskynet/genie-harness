@@ -2,6 +2,10 @@
 
 每一版改了什麼。最新的在最上面。 · What changed in each version, newest first.
 
+## Unreleased
+
+- Claude Code 長對話回覆漂成英文：prefs 只在 SessionStart 送一次，系統提示與工具輸出都是英文，規則被沖淡。現在每 12 則訊息重送一次（`GENIE_PREFS_REFRESH=<N>`，`0` 關閉）；語言行明講工具呼叫之間的說明也照用；自我檢查發現釘了語言但 Claude Code 沒設 `language` 時提醒一次。 · Long Claude Code sessions drifted into English: prefs went out once at SessionStart and faded under English system prompt and tool output. They are now re-sent every 12th prompt (`GENIE_PREFS_REFRESH=<N>`, `0` = off); the language line covers notes between tool calls; the self-check flags a pinned language missing from Claude Code's `language` setting.
+
 ## 0.5.7 — 2026-10-31
 
 - 長 session 換新對話提醒改為預設關閉：原本 150 分鐘後每 30 分提醒 /clear，前提「長 session 會崩」來自已修好的 client 記憶體洩漏。要提醒設 `GENIE_LONG_SESSION_MIN=<分鐘>`。 · The long-session /clear reminder is now off by default; its "long sessions crash" premise came from a since-fixed client memory leak. Set `GENIE_LONG_SESSION_MIN=<minutes>` to opt in (#36).

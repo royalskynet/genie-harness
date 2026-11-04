@@ -116,7 +116,8 @@ BLOCK_HINT = {
 # ~4 characters per word forever; say it in genie-humanizer instead unless the
 # model has to have it in front of it while answering.
 ALWAYS = (
-    "answer in the user's language (Traditional Chinese: Taiwan terms, 軟體/程式/網路)",
+    "answer in the user's language, notes between tool calls too (Traditional Chinese: "
+    "Taiwan terms, 軟體/程式/網路)",
     # The 4 stop cases stay spelled out. Shortening them to "irreversible, costly"
     # reads as a narrower list and talks the model out of stopping before a publish.
     "decide and proceed: pick one option and do it; ask only when it cannot be undone, "
@@ -525,7 +526,8 @@ def render_context(res, host="codex", part="all"):
         lines.append("when to add: " + "; ".join(hints))
     always = list(ALWAYS)
     if res.get("lang"):
-        always[0] = "always answer in %s, whatever they write in" % res["lang"]
+        always[0] = ("always answer in %s, whatever they write in, notes between tool calls too"
+                     % res["lang"])
     lines.append("not preference-tunable, always on: " + "; ".join(always))
     # No line about the command gate or the host's permission prompts: both are
     # enforced outside the model, so telling it every turn changed nothing it did.

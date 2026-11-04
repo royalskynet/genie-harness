@@ -56,6 +56,35 @@ UNSURE = "unsure"
 # client memory leak; a default nag pushes /clear on users who need continuity.
 LONG_SESSION_DEFAULT_MIN = 0
 LONG_SESSION_THROTTLE_SEC = 30 * 60  # 30 minutes
+# Claude gets the static prefs only at SessionStart; in a long session the system
+# prompt, skills and tool output are English and the rules (language first) fade.
+# Re-send them every Nth prompt. 0 = off.
+PREFS_REFRESH_DEFAULT = 12
+
+
+def _prefs_refresh_due(data):
+    """True on every Nth prompt of a session. Counter in $GENIE_STATE_DIR/prefs-<sid>."""
+    try:
+        n = int(os.environ.get("GENIE_PREFS_REFRESH", str(PREFS_REFRESH_DEFAULT)))
+    except ValueError:
+        n = PREFS_REFRESH_DEFAULT
+    safe_sid = re.sub(r"[^A-Za-z0-9_-]", "", data.get("session_id") or "")
+    if n <= 0 or not safe_sid:
+        return False
+    state_dir = os.environ.get("GENIE_STATE_DIR", os.path.expanduser("~/.genie/state"))
+    path = os.path.join(state_dir, "prefs-" + safe_sid)
+    try:
+        with open(path, encoding="utf-8") as f:
+            count = int(f.read().strip() or "0") + 1
+    except (OSError, ValueError):
+        count = 1
+    try:
+        os.makedirs(state_dir, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(str(count))
+    except OSError:
+        return False  # no counter, no refresh: never resend every turn
+    return count % n == 0
 
 
 def _check_long_session(data):
@@ -736,6 +765,8 @@ def hook(raw, host="codex"):
                 lines.append(WHEEL_HINT % ref)
         # Claude gets the static prefs once from SessionStart; Codex has no such hook.
         ctx = prefs.render_context(res, host, "turn" if host == "claude" else "all")
+        if host == "claude" and _prefs_refresh_due(data) and not ctx.startswith("[genie prefs]"):
+            ctx = "\n".join(c for c in (prefs.render_context(res, host, "static"), ctx) if c)
         if ctx:
             lines.append(ctx)
     except Exception as e:  # prefs broken: still route

@@ -614,6 +614,27 @@ def test_secret_detection(fails):
         r.INTENTS["threshold"] = saved
 
 
+def test_prefs_refresh(fails):
+    """Claude: static prefs ride along every Nth prompt so the rules (language
+    first) do not fade in a long session; off at 0; other prompts stay lean."""
+    import json as _json
+    old = {k: os.environ.get(k) for k in ("GENIE_STATE_DIR", "GENIE_PREFS_REFRESH")}
+    try:
+        for n, want in (("3", [False, False, True, False, False, True]), ("0", [False] * 4)):
+            os.environ["GENIE_STATE_DIR"] = tempfile.mkdtemp(prefix="genie-refresh-")
+            os.environ["GENIE_PREFS_REFRESH"] = n
+            got = ["not preference-tunable" in r.hook(_json.dumps(
+                {"prompt": "繼續做下一步吧謝謝你", "session_id": "rf"}), "claude") for _ in want]
+            if got != want:
+                fails.append("prefs refresh N=%s: got %r want %r" % (n, got, want))
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
 def test_long_session_reminder(fails):
     """Long session reminder: triggers after threshold minutes, throttles, respects
     GENIE_LONG_SESSION_MIN=0, handles missing transcript_path gracefully."""
@@ -801,6 +822,7 @@ def main():
     test_do_follows_blocks(fails)
     test_secret_detection(fails)
     test_long_session_reminder(fails)
+    test_prefs_refresh(fails)
     run_cases(CASES, fails, "boundary")
     run_eval_set(fails)
     test_missing_model_warns(fails)

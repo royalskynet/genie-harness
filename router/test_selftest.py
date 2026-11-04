@@ -21,6 +21,9 @@ SELFTEST = os.path.join(HERE, "selftest.py")
 
 def run_selftest(root, extra_env=None):
     env = dict(os.environ)
+    # Never read the developer's real prefs or Claude settings.
+    env["GENIE_PREFS"] = os.path.join(tempfile.gettempdir(), "genie-selftest-none.json")
+    env["CLAUDE_CONFIG_DIR"] = tempfile.mkdtemp(prefix="genie-cfg-")
     if extra_env:
         env.update(extra_env)
     proc = subprocess.run(
@@ -81,8 +84,38 @@ def test_missing_done_gate():
     return None
 
 
+def test_lang_setting():
+    """④ Pinned lang without Claude's `language` setting -> one notice; with it -> silent."""
+    with tempfile.TemporaryDirectory(prefix="genie-test-") as tmpdir:
+        prefs_path = os.path.join(tmpdir, "p.json")
+        with open(prefs_path, "w") as f:
+            json.dump({"lang": "Traditional Chinese"}, f)
+        cfg = os.path.join(tmpdir, "cfg")
+        os.mkdir(cfg)
+        env = {"GENIE_PREFS": prefs_path, "CLAUDE_CONFIG_DIR": cfg}
+        _, out, _ = run_selftest(ROOT, env)
+        if "`language` setting is empty" not in out:
+            return f"lang: no settings.json must warn, got: {out.strip()[:200]}"
+        with open(os.path.join(cfg, "settings.json"), "w") as f:
+            json.dump({"language": "Traditional Chinese"}, f)
+        _, out, _ = run_selftest(ROOT, env)
+        if out.strip():
+            return f"lang: setting present must be silent, got: {out.strip()[:200]}"
+        with open(prefs_path, "w") as f:
+            json.dump({}, f)
+        os.unlink(os.path.join(cfg, "settings.json"))
+        _, out, _ = run_selftest(ROOT, env)
+        if out.strip():
+            return f"lang: unpinned must be silent, got: {out.strip()[:200]}"
+    return None
+
+
 def main():
     fails = []
+
+    err = test_lang_setting()
+    if err:
+        fails.append(err)
 
     # Test 1: Real repo
     err = test_real_repo()

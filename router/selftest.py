@@ -88,6 +88,33 @@ def check_hooks(root, env):
     return "ok"
 
 
+def check_lang():
+    """Check 4: a pinned reply language is also in Claude Code's own `language`
+    setting. Genie sends it at SessionStart; the setting puts it in the system
+    prompt every turn. Returns a notice line or None."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import prefs
+        lang = prefs.load().get("lang")
+    except Exception:
+        return None
+    if not lang:
+        return None
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    path = os.path.join(cfg, "settings.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            if json.load(f).get("language"):
+                return None
+    except FileNotFoundError:
+        pass
+    except Exception:
+        return None  # unreadable settings: not ours to judge
+    return ("Genie: replies are pinned to %s, but Claude Code's `language` setting is empty, "
+            "so long sessions drift into English. Offer once, in one sentence, to add "
+            "\"language\": \"%s\" to %s (one line, reversible)." % (lang, lang, path))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", help="Root directory (default: parent of this file)")
@@ -97,6 +124,10 @@ def main():
         root = os.path.abspath(args.root)
     else:
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    notice = check_lang()  # reads the real prefs, before the env points at a temp copy
+    if notice:
+        print(notice)
 
     # Create isolated temp directory for this run
     with tempfile.TemporaryDirectory(prefix="genie-selftest-") as tmpdir:

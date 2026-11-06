@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- 新增語氣抽查（`tone_gate.py`）與 genie-humanizer 中文翻譯腔規則：依同題配對研究，回覆有「不是 X 而是 Y」、結論冒號、頓號連排等 AI 腔，下一輪提醒，不擋回覆。 · New tone check (`tone_gate.py`) and Chinese translationese rules in genie-humanizer, from a paired human/AI study: AI-tone patterns in a reply produce a next-turn note, never a block.
 - Claude Code 長對話回覆漂成英文：prefs 只在 SessionStart 送一次，系統提示與工具輸出都是英文，規則被沖淡。現在每 12 則訊息重送一次（`GENIE_PREFS_REFRESH=<N>`，`0` 關閉）；語言行明講工具呼叫之間的說明也照用；自我檢查發現釘了語言但 Claude Code 沒設 `language` 時提醒一次。 · Long Claude Code sessions drifted into English: prefs went out once at SessionStart and faded under English system prompt and tool output. They are now re-sent every 12th prompt (`GENIE_PREFS_REFRESH=<N>`, `0` = off); the language line covers notes between tool calls; the self-check flags a pinned language missing from Claude Code's `language` setting.
 
 ## 0.5.7 — 2026-10-31

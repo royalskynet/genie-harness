@@ -134,6 +134,7 @@ Genie 先在本地判斷你這句話是什麼意圖，再用一行 `DO:` 告訴�
 - **決定閘**（`decide_gate.py`，只有 Claude Code）：可逆的問題，模型自己已經標了唯一一個「(Recommended)」，就不准問你，直接照它做，回報時講一句採用了哪個預設、怎麼改。不可逆的問題一定問，但必須剛好標一個建議選項並寫理由，空白選擇題擋回去重問。不呼叫模型。擋下時訊息開頭是 `Genie decide_gate:`，並記一行到 `~/.genie/decide.log`（`GENIE_DECIDE_LOG=0` 關），跟別的閘疊跑時分得出是誰擋的。
 - **連敗閘**（`fail_streak.py`）：同一個指令或同一個檔連續失敗 2 次，叫模型停下重讀錯誤，先列 3 個能被證明是錯的替代原因（設定過期、權限、路由走錯、依賴沒在跑）各跑一個最小檢查，排除前不准只靠換模型、加 timeout、重送或重啟，不試第三招。
 - **歸因閘**（`blame_gate.py`，只有 Claude Code）：收尾那句把失敗推給「模型太弱」或「timeout」、卻沒列任何替代原因，擋一次要它補。已經寫了排除過什麼就放行。不呼叫模型。
+- **語氣抽查**（`tone_gate.py`，只有 Claude Code）：收尾那則回覆若有中文 AI 腔（「不是 X 而是 Y」、結論冒號、「說白了」、「對於…來說」、頓號連排四項以上、破折號過多），下一輪提醒模型別再這樣寫。不擋回覆、不呼叫模型；`humanize` 關掉就不查。句型依據 [lieflat-less-ai-tone](https://github.com/larashero3-dotcom/lieflat-less-ai-tone) 的同題配對研究。
 - **宿主權限層**：Codex 的 sandbox／approval、Claude Code 的權限確認。
 
 唯一例外：把 `guard` 交給另一個**真的裝成 PreToolUse hook** 的守門工具。只改設定檔做不到。
@@ -246,10 +247,11 @@ router/
   decide_gate.py           PreToolUse(AskUserQuestion)：可逆且已有建議 → 照做不問；不可逆缺建議或理由 → 重問
   fail_streak.py           PostToolUse(Failure)：同指令或同檔連敗 2 次 → 停下重讀、先排除替代原因
   blame_gate.py            Stop（Claude Code 限定）：怪模型或 timeout 卻沒列替代原因 → 擋一次
+  tone_gate.py             Stop（Claude Code 限定）：回覆有中文 AI 腔 → 下一輪提醒，不擋
   safe_update.py           Claude Code 更新：所有 scope 一起升，舊版留給開著的 session
   selftest.py              SessionStart 自我檢查，正常時不出聲
   eval_set.json            102 句手寫 dev 語料（不是 benchmark）
-  test_*.py                14 支自檢，全部要 PASS
+  test_*.py                15 支自檢，全部要 PASS
   setup_model.py           一次性：下載模型 → 修剪詞表 → int8
 skills/
   genie-explain/           聽不懂：只重講卡住的點，詞全部註解，比喻 ≤3 句
@@ -410,6 +412,7 @@ Not blocks; no preference disables them:
 - **Decide gate** (`decide_gate.py`, Claude Code only): a reversible question where the model already marked exactly one option "(Recommended)" is denied, so it does that and says in one line which default it took. Irreversible questions are always asked, but must mark exactly one recommendation with a reason; a bare choice is sent back. No model call. Each deny starts with `Genie decide_gate:` and logs one line to `~/.genie/decide.log` (`GENIE_DECIDE_LOG=0` turns it off), so a stacked gate can be told apart.
 - **Fail-streak gate** (`fail_streak.py`): the same command or the same file fails twice → the model stops, re-reads the error, and checks three alternative causes a test could prove wrong (stale config, permissions, wrong route, a dependency not running) before swapping models, raising timeouts, resending or restarting.
 - **Blame gate** (`blame_gate.py`, Claude Code only): the final reply blames the model or a timeout and names no alternative cause → blocks once and asks for them. Replies that say what was ruled out pass. No model call.
+- **Tone check** (`tone_gate.py`, Claude Code only): the final reply has Chinese AI-tone patterns (the "not X but Y" turn, conclusion colons, stock openers, topic shells, 4+ items joined by 、, too many dashes) → a note for the next turn. Never blocks, no model call, skipped when `humanize` is off. Patterns from the paired study in [lieflat-less-ai-tone](https://github.com/larashero3-dotcom/lieflat-less-ai-tone).
 - **Host permissions**: Codex sandbox/approval, Claude Code permission prompts.
 
 The one exception: handing `guard` to another command guard that is actually installed as a PreToolUse hook. A prefs file alone can't do it.
@@ -522,10 +525,11 @@ router/
   decide_gate.py           PreToolUse(AskUserQuestion): reversible with a recommendation → do it; irreversible without one → re-ask
   fail_streak.py           PostToolUse(Failure): same command or file fails twice → stop, re-read, rule out alternatives
   blame_gate.py            Stop (Claude Code only): blames model or timeout with no alternative cause → block once
+  tone_gate.py             Stop (Claude Code only): Chinese AI-tone patterns in the reply → note next turn, never blocks
   safe_update.py           Claude Code update: every scope at once, old version kept for open sessions
   selftest.py              SessionStart self-check, silent when healthy
   eval_set.json            102 hand-written dev cases (NOT a benchmark)
-  test_*.py                14 self-checks, all must PASS
+  test_*.py                15 self-checks, all must PASS
   setup_model.py           one-time: download model → trim vocab → int8
 skills/
   genie-explain/           lost: re-explain only the stuck point, every term glossed, analogy ≤3 sentences

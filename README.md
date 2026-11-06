@@ -49,13 +49,13 @@ curl -fsSL https://raw.githubusercontent.com/royalskynet/genie-harness/main/get.
 
 也可以在 Claude Code 裡打：`/plugin marketplace add royalskynet/genie-harness`，再打 `/plugin install genie-harness@genie-harness`。
 
-- **需要**：Python 3.9+、numpy。
+- **需要**：Python 3.9+。numpy 可選：沒裝也能用，意圖判斷只剩關鍵字比對。
 - **意圖模型**：約 512 MB，處理後留 35 MB，下載一次要幾分鐘。
   - **Claude Code**：第一次開 session 時在背景下載到 `~/.genie/model`。下載完前一樣能用，由模型自己判斷意圖。
   - **Codex**：`install.sh` 安裝時當場下載到 repo 裡的 `router/model`，下載完才裝完。
 - **wheel（找輪子）**：在另一個 repo，`get.sh` 會問你要不要裝到 `~/dev/wheel`（見上面附加元件）。手動裝 Codex 版時沒有它，安裝器印 `skipping wheel` 照樣裝完，只是少了找輪子。
 - **平台**：macOS 實測可用。Linux、WSL 沒有實測。Windows 原生不支援（hook 是 sh 腳本）。
-- **numpy 裝不上**：Homebrew Python 出現 `externally-managed-environment` 時，跑 `python3 -m pip install --user --break-system-packages numpy`。
+- **想裝 numpy 但裝不上**：Homebrew Python 出現 `externally-managed-environment` 時，跑 `python3 -m pip install --user --break-system-packages numpy`。
 
 ### 更新
 
@@ -327,13 +327,13 @@ Add `-y` to answer yes to everything. With no terminal to ask (an AI running it 
 
 Or inside Claude Code: `/plugin marketplace add royalskynet/genie-harness`, then `/plugin install genie-harness@genie-harness`.
 
-- **Needs**: Python 3.9+, numpy.
+- **Needs**: Python 3.9+. numpy is optional: without it everything works, and intent routing uses keywords only.
 - **Intent model**: ~512 MB, 35 MB after processing, a few minutes to download once.
   - **Claude Code**: downloaded in the background to `~/.genie/model` on the first session. Until then it still works; the model judges intent itself.
   - **Codex**: `install.sh` downloads it on the spot into the repo's `router/model`; install finishes after the download.
 - **wheel (prior-art search)**: lives in a separate repo; `get.sh` offers to install it to `~/dev/wheel` (see add-ons above). A manual Codex install without it prints `skipping wheel` and finishes, minus prior-art search.
 - **Platforms**: tested on macOS. Linux and WSL untested. Native Windows unsupported (hooks are sh scripts).
-- **numpy won't install**: on Homebrew Python with `externally-managed-environment`, run `python3 -m pip install --user --break-system-packages numpy`.
+- **numpy won't install** (optional): on Homebrew Python with `externally-managed-environment`, run `python3 -m pip install --user --break-system-packages numpy`.
 
 ### Update
 

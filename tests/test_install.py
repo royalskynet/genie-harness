@@ -113,20 +113,24 @@ class InstallerTest(unittest.TestCase):
         self.assertEqual(os.readlink(skill_root / "wheel"), str(upstream))
         self.assertTrue((skill_root / "wheel" / "SKILL.md").exists())
 
-    def test_pep668_failure_prints_usable_user_install_command(self):
+    def test_no_numpy_installs_anyway_and_prints_usable_user_install_command(self):
+        # numpy is optional: the router falls back to keywords, so a user who
+        # never installs Python packages still gets every hook.
         repo = self.make_repo(self.root / "pep668")
+        (repo / "router" / "model" / "vocab.json").unlink()  # setup_model.py must not run
         home, codex = self.root / "home", self.root / "codex"
         home.mkdir()
         codex.mkdir()
 
         result = self.run_install(repo, home, codex, no_numpy=True)
 
-        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn(
             "python3 -m pip install --user --break-system-packages numpy",
             result.stdout,
         )
-        self.assertFalse((codex / "hooks.json").exists())
+        self.assertNotIn("router self-check: PASS", result.stdout)
+        self.assertTrue((codex / "hooks.json").exists())
 
     def test_reinstall_preserves_backups_and_refreshes_moved_hook(self):
         repo_parent = self.root / "checkout with spaces"

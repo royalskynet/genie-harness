@@ -91,8 +91,12 @@ BASH_DENY = [
      r"\|\s*(?:sudo\s+)?(?:ba|z|k|fi)?sh\b",
      "This pipes command output straight into a shell (decoded, generated, or otherwise). Read what it would run before running it. 改做：先存成檔案（`... > out.sh`），讀過內容再執行。"),
     ("publish-artifact",
-     r"\b(?:npm\s+publish|yarn\s+publish|pnpm\s+publish|twine\s+upload|cargo\s+publish|gem\s+push|nuget\s+push|gh\s+release\s+create|docker\s+push)\b",
+     r"\b(?:npm\s+publish|yarn\s+publish|pnpm\s+publish|twine\s+upload|cargo\s+publish|gem\s+push|nuget\s+push|docker\s+push)\b",
      "This publishes an artifact that other people and machines can pull. It cannot be pulled back. 改做：先 `npm publish --dry-run` 演練一次，或發到測試版（`npm publish --tag beta`）。"),
+    # A draft release is visible only to repo writers, so it is the safe step.
+    ("publish-gh-release",
+     r"\bgh\s+release\s+create\b(?![^|;&\n]*--draft\b)",
+     "This publishes a GitHub release. Watchers are notified and its files can be downloaded at once; deleting it later does not undo that. 改做：加 `--draft` 建成草稿（只有 repo 協作者看得到），確認內容後再 `gh release edit <tag> --draft=false`。"),
     ("write-credential",
      r"\b(?:gh\s+(?:secret|variable)\s+set|aws\s+configure\s+store\s+credentials|gcloud\s+auth\s+application-default\s+set)\b",
      "This writes credentials. Make sure you know exactly where they are going. 改做：改用環境變數（`export TOKEN=...`）或 macOS Keychain，不要把值寫進檔案。"),
@@ -283,6 +287,41 @@ def _wrapped_scripts(cmd):
     return out
 
 
+# Heredoc body as data: `python3 - <<'PY'` text that only mentions a command
+# should not trip the rules. A body fed to a shell (`bash <<EOF`) stays live.
+HEREDOC_RE = re.compile(r"<<(-?)\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
+SHELL_FEED_RE = re.compile(r"(?:^|[\s|;&(])(?:(?:ba|z|k|da|a|fi)?sh|eval|source|\.)\s+(?:-\S+\s+)*(?:-\s+)?$")
+
+
+def _blank_heredocs(cmd):
+    """Blank the body of every heredoc whose command is not a shell.
+
+    ponytail: one heredoc per opener line; a Python body that calls
+    os.system("git clean -fdx") is no longer seen by the command rules (the
+    literal rules still read the raw text). Upgrade by parsing the body per
+    interpreter if that gap matters.
+    """
+    lines = cmd.split("\n")
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        m = HEREDOC_RE.search(line)
+        i += 1
+        if not m:
+            continue
+        feeds_shell = bool(SHELL_FEED_RE.search(line[:m.start()]))
+        tag, strip_tabs = m.group(3), m.group(1) == "-"
+        while i < len(lines):
+            body = lines[i]
+            end = (body.lstrip("\t") if strip_tabs else body) == tag
+            out.append(body if (end or feeds_shell) else " " * len(body))
+            i += 1
+            if end:
+                break
+    return "\n".join(out)
+
+
 def _clean_path(s):
     """Strip non-path tokens from a captured argument tail.
 
@@ -357,7 +396,7 @@ def inspect_command(cmd, _depth=0):
     if any(h[0] == "deny" for h in hits):
         return [h for h in hits if h[0] == "deny"][:1]
 
-    live = _blank_quotes(stripped)              # prose-safe: literals become spaces
+    live = _blank_quotes(_blank_heredocs(stripped))  # prose-safe: literals become spaces
     sql_live = re.sub(r"[\"']", "", stripped)  # literals rules need the statement text
 
     for name, rx, reason in BASH_DENY_C:

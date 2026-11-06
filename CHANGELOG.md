@@ -2,8 +2,9 @@
 
 每一版改了什麼。最新的在最上面。 · What changed in each version, newest first.
 
-## Unreleased
+## 0.5.8 — 2026-11-06
 
+- numpy 改為選配：Codex 安裝沒有 numpy 時不再中止，只提醒；router 退回關鍵字比對，所有 hook 照常運作。 · numpy is now optional: the Codex installer warns instead of stopping, and the router falls back to keywords with every hook working.
 - 災難指令閘：`gh release create` 改用自己的理由與解法（加 `--draft`），草稿版放行；heredoc 內文當資料，不再誤判成指令（餵給 shell 的 `bash <<EOF` 照查）。 · Guard: `gh release create` gets its own reason and a `--draft` remedy, and drafts pass; heredoc bodies are read as data unless fed to a shell (#40).
 - 輪子閘：裝了 ds-claude 時，`task/verify.sh` 工單不擋，其他新檔照擋。 · Wheel gate skips `task/verify.sh` when ds-claude is installed (#41).
 - 新增語氣抽查（`tone_gate.py`）與 genie-humanizer 中文翻譯腔規則：依同題配對研究，回覆有「不是 X 而是 Y」、結論冒號、頓號連排等 AI 腔，下一輪提醒，不擋回覆。 · New tone check (`tone_gate.py`) and Chinese translationese rules in genie-humanizer, from a paired human/AI study: AI-tone patterns in a reply produce a next-turn note, never a block.

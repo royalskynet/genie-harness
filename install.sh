@@ -20,17 +20,18 @@ else
   echo "genie-harness not installed yet -> fresh install"
 fi
 
-if ! python3 -c "import numpy" 2>/dev/null; then
-  echo "numpy is required by the router." >&2
-  echo "Install it for this Python with: python3 -m pip install --user numpy" >&2
+# numpy is optional: without it the router keeps its keyword tier and every
+# hook still works. Many users never install Python packages, so warn, do not stop.
+if python3 -c "import numpy" 2>/dev/null; then
+  [ -f "$HERE/router/model/vocab.json" ] || python3 "$HERE/router/setup_model.py"
+  python3 "$HERE/router/test_router.py" >/dev/null && echo "router self-check: PASS"
+else
+  echo "numpy not found: Genie still works, but intent routing uses keywords only." >&2
+  echo "For better routing, install it for this Python with: python3 -m pip install --user numpy" >&2
   echo "If pip reports externally-managed-environment (for example, Homebrew Python), use:" >&2
   echo "  python3 -m pip install --user --break-system-packages numpy" >&2
-  echo "The --user option keeps numpy in your user site-packages." >&2
-  exit 1
+  echo "Then run this installer again to download the router model." >&2
 fi
-
-[ -f "$HERE/router/model/vocab.json" ] || python3 "$HERE/router/setup_model.py"
-python3 "$HERE/router/test_router.py" >/dev/null && echo "router self-check: PASS"
 
 mkdir -p "$SKILLS" "$CODEX"
 

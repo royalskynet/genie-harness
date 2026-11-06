@@ -127,9 +127,9 @@ Genie 先在本地判斷你這句話是什麼意圖，再用一行 `DO:` 告訴�
 
 這些不是區塊，任何偏好都關不掉：
 
-- **災難指令閘**（`guard_dangerous.py`）：擋 `rm -rf /`、不帶 label 的 `launchctl bootout`、把憑證的值印進對話（`cat .env`、`printenv`、`echo $API_KEY`）。只看變數名的 `cut -d= -f1 .env` 照常放行。
+- **災難指令閘**（`guard_dangerous.py`）：擋 `rm -rf /`、不帶 label 的 `launchctl bootout`、把憑證的值印進對話（`cat .env`、`printenv`、`echo $API_KEY`）。只看變數名的 `cut -d= -f1 .env` 照常放行。`gh release create` 要先加 `--draft` 建草稿，確認後再發布。heredoc 的內文當資料看，筆記裡提到 `git clean -fdx` 不會被擋；餵給 shell 的 `bash <<EOF` 照查。
 - **git 新手警告**（只警告不擋）：丟掉沒 commit 的改動、刪 stash、`branch -D`、把 `.env` 加進 git、把 repo 設公開。工作區乾淨就不出聲。
-- **輪子閘**（`wheel_gate.py`）：判定要找現成方案的那一輪，第一個新檔和 ExitPlanMode（計畫定案）擋到跑過 wheel 為止。改既有檔、寫 `.md` 不擋；同一 session 擋第二次就放行，卡不住你。跟著 `research` 區塊走。
+- **輪子閘**（`wheel_gate.py`）：判定要找現成方案的那一輪，第一個新檔和 ExitPlanMode（計畫定案）擋到跑過 wheel 為止。改既有檔、寫 `.md` 不擋；同一 session 擋第二次就放行，卡不住你。裝了 [ds-claude](https://github.com/royalskynet/ds-claude) 時，它的工單 `task/verify.sh` 不擋。跟著 `research` 區塊走。
 - **完成閘**（`done_gate.py`，只有 Claude Code）：改了程式檔卻什麼都沒跑，擋一次要你跑給它看。`ls`／`cat`／`git status` 這類只看一眼的指令不算跑過。收尾那句引用的 commit hash 或 GitHub issue／PR 網址，若這個 session 的工具輸出和你的訊息裡都沒出現過，也擋一次：這種 ID 只能照抄、不能推算，沒出現過就是編的。數字不查（加總、百分比本來就是算出來的）。Codex 沒有對等的 Stop 事件，所以沒接。
 - **決定閘**（`decide_gate.py`，只有 Claude Code）：可逆的問題，模型自己已經標了唯一一個「(Recommended)」，就不准問你，直接照它做，回報時講一句採用了哪個預設、怎麼改。不可逆的問題一定問，但必須剛好標一個建議選項並寫理由，空白選擇題擋回去重問。不呼叫模型。擋下時訊息開頭是 `Genie decide_gate:`，並記一行到 `~/.genie/decide.log`（`GENIE_DECIDE_LOG=0` 關），跟別的閘疊跑時分得出是誰擋的。
 - **連敗閘**（`fail_streak.py`）：同一個指令或同一個檔連續失敗 2 次，叫模型停下重讀錯誤，先列 3 個能被證明是錯的替代原因（設定過期、權限、路由走錯、依賴沒在跑）各跑一個最小檢查，排除前不准只靠換模型、加 timeout、重送或重啟，不試第三招。
@@ -237,7 +237,7 @@ ln -sfn ~/genie-harness/opencode/genie-dedup.js ~/.config/opencode/plugins/genie
 ```
 AGENTS.md                  核心行為：等級、區塊、標籤、說話規則
 router/
-  genie_router.py          UserPromptSubmit hook：分類 → DO 行 → prefs。只依賴 numpy
+  genie_router.py          UserPromptSubmit hook：分類 → DO 行 → prefs。numpy 選配，沒有就用關鍵字
   intents.json             各意圖的關鍵字與範例句（中英），threshold 在這裡
   prefs.py                 區塊解析：等級預設、pin、單次覆寫
   overlap.py               找出也在做 guard／research／style 的其他工具
@@ -271,6 +271,7 @@ opencode/                              genie-dedup.js
 
 - **`rm -rf ~/Documents` 只警告不擋**：分不出專案資料夾和個人資料，硬猜會擋到正常工作。邊界交給宿主的 sandbox／approval。
 - **閘門是減速帶不是邊界**：正則抓明顯的災難指令，抓不到全部。
+- **heredoc 內文不查指令**：`python3 <<EOF` 裡的 `os.system("git clean -fdx")` 會過。
 - **重複工具偵測有盲點**：不讀 plugin 內建 hook 的內容，名稱看不出用途的 plugin 偵測不到。
 - **沒附 Codex plugin manifest**：Codex 走 `install.sh`。
 - **刻意沒做**：對話狀態、訓練分類器、多語系 UI、專案層級 prefs。
@@ -405,9 +406,9 @@ How to turn off:
 
 Not blocks; no preference disables them:
 
-- **Catastrophic-command gate** (`guard_dangerous.py`): denies `rm -rf /`, `launchctl bootout` with no label, and printing a credential's value into the chat (`cat .env`, `printenv`, `echo $API_KEY`). Name-only checks like `cut -d= -f1 .env` pass.
+- **Catastrophic-command gate** (`guard_dangerous.py`): denies `rm -rf /`, `launchctl bootout` with no label, and printing a credential's value into the chat (`cat .env`, `printenv`, `echo $API_KEY`). Name-only checks like `cut -d= -f1 .env` pass. `gh release create` needs `--draft` first; publish after review. Heredoc bodies are read as data, so a note mentioning `git clean -fdx` passes; a heredoc fed to a shell (`bash <<EOF`) is still checked.
 - **Git beginner warnings** (warn, never block): discarding uncommitted changes, deleting stashes, `branch -D`, staging `.env`, making a repo public. A clean tree stays silent.
-- **Wheel gate** (`wheel_gate.py`): on a turn judged to be about building or choosing, the first new file and ExitPlanMode (a plan is a decision) wait until a prior-art search has run. Edits to existing files and `.md` pass; a second block in the same session opens it, so it can't wedge you. Follows the `research` block.
+- **Wheel gate** (`wheel_gate.py`): on a turn judged to be about building or choosing, the first new file and ExitPlanMode (a plan is a decision) wait until a prior-art search has run. Edits to existing files and `.md` pass; a second block in the same session opens it, so it can't wedge you. With [ds-claude](https://github.com/royalskynet/ds-claude) installed, its `task/verify.sh` work order passes. Follows the `research` block.
 - **Done gate** (`done_gate.py`, Claude Code only): edited code and ran nothing → blocks once and asks for a real run. Look-only commands (`ls`, `cat`, `git status`) don't count. It also blocks once when the final reply cites a commit hash or a GitHub issue/PR URL that no tool output or user message this session contains: such ids can only be quoted, not derived. Numbers are not checked (sums and percentages are computed). Codex has no matching Stop event, so it is not wired there.
 - **Decide gate** (`decide_gate.py`, Claude Code only): a reversible question where the model already marked exactly one option "(Recommended)" is denied, so it does that and says in one line which default it took. Irreversible questions are always asked, but must mark exactly one recommendation with a reason; a bare choice is sent back. No model call. Each deny starts with `Genie decide_gate:` and logs one line to `~/.genie/decide.log` (`GENIE_DECIDE_LOG=0` turns it off), so a stacked gate can be told apart.
 - **Fail-streak gate** (`fail_streak.py`): the same command or the same file fails twice → the model stops, re-reads the error, and checks three alternative causes a test could prove wrong (stale config, permissions, wrong route, a dependency not running) before swapping models, raising timeouts, resending or restarting.
@@ -515,7 +516,7 @@ Measured (M4, Python 3.9): 0.03s / 13 MB on a keyword hit, 0.12s / 63 MB on the 
 ```
 AGENTS.md                  core behavior: levels, blocks, tags, speaking rules
 router/
-  genie_router.py          UserPromptSubmit hook: classify → DO line → prefs. numpy only
+  genie_router.py          UserPromptSubmit hook: classify → DO line → prefs. numpy optional, keywords without it
   intents.json             keywords & example sentences per intent (zh/en), thresholds here
   prefs.py                 block resolution: level defaults, pins, per-call overrides
   overlap.py               finds other tools doing guard / research / style
@@ -549,6 +550,7 @@ opencode/                              genie-dedup.js
 
 - **`rm -rf ~/Documents` is warned, not denied**: there is no reliable way to tell a project checkout from personal data; guessing would block real work. The host's sandbox/approval is the boundary.
 - **The guard is a speed bump, not a boundary**: it catches the obvious catastrophic commands, not all of them.
+- **Heredoc bodies are not checked as commands**: `os.system("git clean -fdx")` inside `python3 <<EOF` passes.
 - **Overlap detection has a blind spot**: it doesn't read hooks shipped inside plugins; a plugin whose name hides its role is not detected.
 - **No Codex plugin manifest**: Codex installs via `install.sh`.
 - **Deliberately not done**: conversation state, a trained classifier, multi-language UI, project-level prefs.

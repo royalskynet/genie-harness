@@ -84,6 +84,22 @@ def main():
         res, _ = run(call("Write", {"file_path": os.path.join(td, "notes.md")}), state)
         check("new .md must not block", not denied(res))
 
+        # ── ds-claude work order: skipped only while ds-claude is installed ──
+        order = os.path.join(td, "repo", "task", "verify.sh")
+        home = os.path.join(td, "home")
+        state = os.path.join(td, "s_ds_absent")
+        arm(state)
+        res, _ = run(call("Write", {"file_path": order}), state, {"HOME": home})
+        check("task/verify.sh without ds-claude must block", denied(res))
+        os.makedirs(os.path.join(home, ".claude", "skills", "ds-claude"))
+        open(os.path.join(home, ".claude", "skills", "ds-claude", "SKILL.md"), "w").close()
+        state = os.path.join(td, "s_ds_present")
+        arm(state)
+        res, _ = run(call("Write", {"file_path": order}), state, {"HOME": home})
+        check("task/verify.sh with ds-claude must not block", not denied(res))
+        res, _ = run(call("Write", {"file_path": new_file}), state, {"HOME": home})
+        check("ds-claude installed still gates other new files", denied(res))
+
         # ── the search itself clears the gate ──
         state = os.path.join(td, "s_clear")
         arm(state)

@@ -35,6 +35,11 @@ MAX_DENIES = 2
 DOC_SUFFIXES = (".md", ".txt", ".rst")
 # The wheel skill's step 0 is its own registry lookup, so the command that
 # proves a search happened is the one the skill always runs first.
+# ds-claude writes a work order under task/ and dispatches it; the order is not
+# product code, so its verify script is not what this gate exists to catch.
+# Only while ds-claude is installed, so other repos' task/ dirs stay gated.
+DS_CLAUDE_SKILL = "~/.claude/skills/ds-claude/SKILL.md"
+DS_CLAUDE_ORDER = re.compile(r"(?:^|/)task/verify\.sh$")
 RAN_WHEEL_CMD = re.compile(r"wheel_registry\.py|\.wheel/registry\.tsv")
 REASON = (
     "Genie wheel gate: this turn is about building or choosing, and no prior-art "
@@ -91,6 +96,8 @@ def is_gated(tool_name, tool_input):
         return False
     path = str(tool_input.get("file_path") or "")
     if not path or path.lower().endswith(DOC_SUFFIXES):
+        return False
+    if DS_CLAUDE_ORDER.search(path) and os.path.exists(os.path.expanduser(DS_CLAUDE_SKILL)):
         return False
     return not os.path.exists(os.path.expanduser(path))
 

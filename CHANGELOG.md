@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- 災難指令閘：`gh release create` 改用自己的理由與解法（加 `--draft`），草稿版放行；heredoc 內文當資料，不再誤判成指令（餵給 shell 的 `bash <<EOF` 照查）。 · Guard: `gh release create` gets its own reason and a `--draft` remedy, and drafts pass; heredoc bodies are read as data unless fed to a shell (#40).
+- 輪子閘：裝了 ds-claude 時，`task/verify.sh` 工單不擋，其他新檔照擋。 · Wheel gate skips `task/verify.sh` when ds-claude is installed (#41).
 - 新增語氣抽查（`tone_gate.py`）與 genie-humanizer 中文翻譯腔規則：依同題配對研究，回覆有「不是 X 而是 Y」、結論冒號、頓號連排等 AI 腔，下一輪提醒，不擋回覆。 · New tone check (`tone_gate.py`) and Chinese translationese rules in genie-humanizer, from a paired human/AI study: AI-tone patterns in a reply produce a next-turn note, never a block.
 - Claude Code 長對話回覆漂成英文：prefs 只在 SessionStart 送一次，系統提示與工具輸出都是英文，規則被沖淡。現在每 12 則訊息重送一次（`GENIE_PREFS_REFRESH=<N>`，`0` 關閉）；語言行明講工具呼叫之間的說明也照用；自我檢查發現釘了語言但 Claude Code 沒設 `language` 時提醒一次。 · Long Claude Code sessions drifted into English: prefs went out once at SessionStart and faded under English system prompt and tool output. They are now re-sent every 12th prompt (`GENIE_PREFS_REFRESH=<N>`, `0` = off); the language line covers notes between tool calls; the self-check flags a pinned language missing from Claude Code's `language` setting.
 

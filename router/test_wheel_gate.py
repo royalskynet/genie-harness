@@ -24,8 +24,10 @@ import wheel_gate  # noqa: E402  (same dir, used for open_gate/gate_path)
 
 def run(payload, state_dir, env_extra=None):
     """-> (parsed stdout or None, exit code)."""
-    env = dict(os.environ, GENIE_STATE_DIR=state_dir)
+    env = dict(os.environ, GENIE_STATE_DIR=state_dir,
+               GENIE_PREFS=os.path.join(state_dir, "no-prefs.json"))  # defaults: research on
     env.pop("GENIE_WHEEL_GATE", None)
+    env.pop("GENIE_WHEEL_FIRST", None)
     env.update(env_extra or {})
     p = subprocess.run([sys.executable, GATE], input=json.dumps(payload),
                        capture_output=True, text=True, env=env, timeout=20)
@@ -60,10 +62,50 @@ def main():
         with open(existing, "w") as f:
             f.write("x = 1\n")
 
-        # ── MUST PASS: nothing armed, nothing blocked ──
+        # ── un-armed session: the first new file blocks once, then never again ──
         state = os.path.join(td, "s_unarmed")
-        res, rc = run(call("Write", {"file_path": new_file}), state)
-        check("un-armed session must not be blocked", not denied(res) and rc == 0)
+        r1, rc = run(call("Write", {"file_path": new_file}), state)
+        r2, _ = run(call("Write", {"file_path": new_file}), state)
+        check("un-armed: first new file blocks once", denied(r1) and rc == 0)
+        check("un-armed: second attempt passes", not denied(r2))
+        state = os.path.join(td, "s_unarmed_looked")
+        run(call("Bash", {"command": "grep -iF x ~/.wheel/registry.tsv"}), state)
+        res, _ = run(call("Write", {"file_path": new_file}), state)
+        check("un-armed after a registry lookup must not block", not denied(res))
+        res, _ = run(call("Write", {"file_path": new_file}), os.path.join(td, "s_first_off"),
+                     {"GENIE_WHEEL_FIRST": "0"})
+        check("GENIE_WHEEL_FIRST=0 turns off the un-armed block", not denied(res))
+        off = os.path.join(td, "prefs-off.json")
+        with open(off, "w") as f:
+            json.dump({"blocks": {"research": "off"}}, f)
+        res, _ = run(call("Write", {"file_path": new_file}), os.path.join(td, "s_research_off"),
+                     {"GENIE_PREFS": off})
+        check("research=off turns off the un-armed block", not denied(res))
+        res, _ = run(call("ExitPlanMode", {"plan": "x"}), os.path.join(td, "s_unarmed_plan"))
+        check("un-armed ExitPlanMode must not block", not denied(res))
+
+        # ── other ways to create a file (armed) ──
+        def armed_denies(name, tool, inp, cwd=""):
+            st = os.path.join(td, "s_" + name)
+            arm(st)
+            payload = call(tool, inp)
+            payload["cwd"] = cwd
+            res, _ = run(payload, st)
+            return denied(res)
+        check("apply_patch Add File must block",
+              armed_denies("ap_add", "apply_patch", {"command": "*** Begin Patch\n*** Add File: %s\n+x\n*** End Patch" % new_file}))
+        check("apply_patch Update File must not block",
+              not armed_denies("ap_upd", "apply_patch", {"command": "*** Begin Patch\n*** Update File: %s\n@@\n-x\n+y\n*** End Patch" % existing}))
+        check("heredoc into a new file must block",
+              armed_denies("hd_new", "Bash", {"command": "cat > %s <<'EOF'\nprint(1)\nEOF" % new_file}))
+        check("relative heredoc path resolves against cwd",
+              armed_denies("hd_rel", "Bash", {"command": "tee thing.py <<EOF\nx\nEOF"}, td))
+        check("heredoc into an existing file must not block",
+              not armed_denies("hd_old", "Bash", {"command": "cat > already.py <<EOF\nx\nEOF"}, td))
+        check("plain redirect (no heredoc) must not block",
+              not armed_denies("redir", "Bash", {"command": "echo x > %s 2>&1" % new_file}))
+        check("new test file must not block",
+              not armed_denies("testf", "Write", {"file_path": os.path.join(td, "tests", "test_x.py")}))
 
         # ── MUST BLOCK ──
         state = os.path.join(td, "s_armed")

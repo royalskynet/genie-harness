@@ -454,6 +454,14 @@ DO = {
                      "conversation.",
     "risky_action": "say in one plain sentence what this does and whether it can be undone, "
                     "then wait for a yes.",
+    # A long message that only mentions push / delete / rm is usually a work
+    # order or an approved plan. Waiting for a yes there re-asks what the user
+    # already ordered: Codex sessions stopped on "是否開始？" with the plan approved.
+    "risky_ordered": "this message mentions an action that cannot be undone or is seen by "
+                     "others. If the message itself orders that exact action (a work order, "
+                     "a plan they approved), do it, then say what it did and whether it can "
+                     "be undone. Stop for a yes only on such an action the message does not "
+                     "already order.",
     "ambiguous_request": "their goal is not clear yet. Never answer only that you cannot. "
                          "Ask ONE question that offers at most 3 concrete readings of what "
                          "you CAN do toward it here (tools on this machine, a free app, a "
@@ -697,6 +705,20 @@ def arm_wheel_gate(data, intent, order, ext_log, res, host):
         sys.stderr.write("genie-router: wheel gate not armed (%s)\n" % e)
 
 
+# A work order or pasted plan, not a one-line command. A one-liner that says
+# force push still waits for a yes; a 40-line plan that mentions push does not.
+# ponytail: line/char count only; if real one-line orders run long, add a
+# structure signal (headings, numbered steps) from route.log samples.
+WORK_ORDER_LINES = 5
+WORK_ORDER_CHARS = 400
+
+
+def is_work_order(text):
+    prose = SECRET_RUN.sub("", text or "")
+    lines = [l for l in prose.splitlines() if l.strip()]
+    return len(lines) >= WORK_ORDER_LINES or len(prose) > WORK_ORDER_CHARS
+
+
 def hook(raw, host="codex"):
     """UserPromptSubmit: tag + DO + prefs, or prefs alone when the router
     abstains, or nothing at all when the turn is not the user talking.
@@ -752,12 +774,15 @@ def hook(raw, host="codex"):
         except Exception as e:  # extension broken: plain genie output
             sys.stderr.write("genie-router: route_ext failed (%s)\n" % e)
 
+    do_intent = "degraded" if degraded else intent
+    if intent == "risky_action" and is_work_order(text):
+        do_intent = "risky_ordered"
     try:
         sys.path.insert(0, HERE)
         import prefs
         res = prefs.resolve(text)
         if order:
-            lines.append(dispatch("degraded" if degraded else intent, res, host))
+            lines.append(dispatch(do_intent, res, host))
         arm_wheel_gate(data, intent, order, ext_log, res, host)
         if not order and not abstain and intent in WHEEL_INTENTS:
             ref = wheel_ref(res, host)
@@ -772,7 +797,7 @@ def hook(raw, host="codex"):
     except Exception as e:  # prefs broken: still route
         sys.stderr.write("genie-router: prefs unavailable (%s)\n" % e)
         if order:
-            lines.append(dispatch("degraded" if degraded else intent, {}, host))
+            lines.append(dispatch(do_intent, {}, host))
 
     log_route(text, intent, score, why, conf, ext_log)
     return "\n".join(lines)

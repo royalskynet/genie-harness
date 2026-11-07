@@ -607,6 +607,18 @@ def test_duplicate_wheel_and_registry(fails):
                            os.path.join(sk2, "wheel"))
                 eq([k for k, _ in overlap.duplicates([sk2]) if k.startswith("dup:skill:")], [],
                    "a link to the same SKILL.md is the same skill, not a copy", fails)
+                # a /wheel command shim next to the skills dir shadows that link
+                sk3 = os.path.join(sk2, "cfg", "skills")
+                os.makedirs(sk3)
+                os.symlink(os.path.realpath(os.path.dirname(upstream)), os.path.join(sk3, "wheel"))
+                eq([k for k, _ in overlap.duplicates([sk3]) if k.startswith("dup:command:")], [],
+                   "no command shim, nothing flagged", fails)
+                shim = os.path.join(sk2, "cfg", "commands", "wheel.md")
+                os.makedirs(os.path.dirname(shim))
+                with open(shim, "w") as f:
+                    f.write("Read ~/dev/wheel/skills/wheel/SKILL.md\n")
+                eq([k for k, _ in overlap.duplicates([sk3]) if k.startswith("dup:command:")],
+                   ["dup:command:" + shim], "a /wheel command shim is flagged", fails)
             finally:
                 os.environ.pop("GENIE_WHEEL_UPSTREAM", None) if old_up is None else os.environ.__setitem__("GENIE_WHEEL_UPSTREAM", old_up)
 

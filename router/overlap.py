@@ -245,6 +245,18 @@ def duplicates(dirs=None):
                             "that same skill (show the exact path, wait for a yes)" % p))
         except Exception:
             pass
+        # A /wheel command shim wins over the skill of the same name, so the
+        # wheel Genie links never runs and its local notes drift in the shim.
+        cmd = os.path.join(os.path.dirname(d), "commands", "wheel.md")
+        try:
+            if os.path.isfile(cmd):
+                out.append(("dup:command:" + cmd,
+                            "a /wheel command at %s stands in for the wheel skill Genie links "
+                            "(royalskynet/wheel-it). Move its local-only notes into the "
+                            "user's CLAUDE.md, link %s to that skill, then remove the command "
+                            "(show the exact paths, wait for a yes)" % (cmd, p)))
+        except Exception:
+            pass
     for r in legacy_registries():
         try:
             if os.path.isfile(r) and not (os.path.exists(WHEEL_REGISTRY)

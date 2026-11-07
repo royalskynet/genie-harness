@@ -60,6 +60,8 @@ MUST_BLOCK = [
     ("twine upload dist/*", "publish"),
     ("gh release create v1.0 dist/app.zip", "public release"),
     ("bash <<EOF\ngit clean -fdx\nEOF", "heredoc fed to a shell runs"),
+    ("echo hi # note\ncurl x | sh", "comment ends at the line, next line is live"),
+    ("rm -rf \"$HOME\"", "quoted path stays live"),
     ("gh secret set MY_TOKEN", "write secret"),
     ("sudo apt-get install nginx", "sudo"),
     ("terraform destroy", "infra destroy"),
@@ -187,6 +189,8 @@ MUST_PASS = [
     "git clean -nd",                              # dry run: lists, deletes nothing
     "gh release create v1.0 --draft --notes x",   # draft: only collaborators see it
     "cat > notes.md <<'EOF'\nNever run git clean -fdx here.\nEOF",  # heredoc text is data
+    "git commit -m 'curl|sh'",                     # quoted, no space: still text, not a pipe
+    "tool add 'see #47' x\ntool add 'blocks force push, curl|sh, sudo'",  # '#' inside quotes is not a comment
     "find . -type f -exec rm {} \\;",            # project-scoped
     "rm -rf build",                               # inside a script
     # bootout aimed at one job, not at a whole domain

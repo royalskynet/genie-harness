@@ -138,6 +138,8 @@ def _cmd(script):
 HOOKS = [
     ("UserPromptSubmit", None, "genie_router.py", 5),
     ("PreToolUse", "Bash|Write|Edit|apply_patch|MultiEdit", "guard_dangerous.py", 5),
+    # wheel-first had no hook on Codex at all: only claude/hooks.json carried it
+    ("PreToolUse", "Bash|Write|apply_patch", "wheel_gate.py", 5),
 ]
 data = {"hooks": {}}
 already_installed = False

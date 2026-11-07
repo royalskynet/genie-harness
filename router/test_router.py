@@ -459,6 +459,24 @@ def test_long_regex_hit_is_a_guess(fails):
         fails.append("小白 still a regex keyword: %s %s" % (intent, why))
 
 
+def test_risky_in_work_order_does_not_reask(fails):
+    """A one-line force push waits for a yes; a pasted work order that mentions
+    push / delete is already the order. Codex sessions stopped on 「是否開始？」
+    with the plan approved because every risky hit said "wait for a yes"."""
+    one = "幫我把這個分支整理一下然後 force push 上去，舊的那些 commit 都不要了，順便把說明也改一改"
+    ctx = r.hook(json.dumps({"prompt": one}), "codex")
+    if "wait for a yes" not in ctx:
+        fails.append("one-line risky order lost its wait-for-yes: %r" % ctx[:160])
+    order = "\n".join(["# 工單：清理舊分支", "目標：整理分支", "1. 改說明",
+                        "2. git push --force-with-lease 到 fork", "3. rm -rf build/",
+                        "## 驗收", "git log -1"])
+    if r.classify(order)[0] != "risky_action":
+        fails.append("work order with rm -rf not tagged risky_action")
+    ctx = r.hook(json.dumps({"prompt": order}), "codex")
+    if "wait for a yes" in ctx or "already order" not in ctx:
+        fails.append("work order still re-asks: %r" % ctx[:200])
+
+
 def test_machine_turns_are_not_classified(fails):
     """UserPromptSubmit also carries turns nobody typed. Those get no injection
     at all: a label on a background-task report dispatches skills for work the
@@ -814,6 +832,7 @@ def main():
     test_low_conf_gives_no_order(fails)
     test_claude_static_once(fails)
     test_long_regex_hit_is_a_guess(fails)
+    test_risky_in_work_order_does_not_reask(fails)
     test_machine_turns_are_not_classified(fails)
     test_bad_envelope_is_not_a_prompt(fails)
     test_hook_stdin_is_utf8(fails)

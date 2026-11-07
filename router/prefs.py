@@ -321,6 +321,11 @@ def owner_of(cap, data, found):
     Genie picks the job back up without anyone having to remember to.
     """
     o = data.get("owners", {}).get(cap, "")
+    # "wheel" is Genie's own skill, which scan() skips on purpose (a copy is a
+    # duplicate, not another owner). Handing research to it with research
+    # pinned off used to switch prior-art search off entirely.
+    if cap == "research" and o == "wheel":
+        return o if os.path.isfile(overlap.wheel_upstream()) else ""
     return o if o and o != "genie" and o in found.get(cap, ()) else ""
 
 

@@ -81,6 +81,19 @@ def main():
         res, _ = run(call("Write", {"file_path": new_file}), os.path.join(td, "s_research_off"),
                      {"GENIE_PREFS": off})
         check("research=off turns off the un-armed block", not denied(res))
+        # research pinned off but handed to wheel (Genie's own skill) = wheel is on
+        handed = os.path.join(td, "prefs-handed.json")
+        with open(handed, "w") as f:
+            json.dump({"blocks": {"research": "off"}, "owners": {"research": "wheel"}}, f)
+        skill = os.path.join(td, "wheel-up", "skills", "wheel", "SKILL.md")
+        os.makedirs(os.path.dirname(skill))
+        open(skill, "w").close()
+        res, _ = run(call("Write", {"file_path": new_file}), os.path.join(td, "s_handed"),
+                     {"GENIE_PREFS": handed, "GENIE_WHEEL_UPSTREAM": os.path.join(td, "wheel-up")})
+        check("research handed to installed wheel keeps the un-armed block", denied(res))
+        res, _ = run(call("Write", {"file_path": new_file}), os.path.join(td, "s_handed_gone"),
+                     {"GENIE_PREFS": handed, "GENIE_WHEEL_UPSTREAM": os.path.join(td, "nowhere")})
+        check("research handed to a missing wheel counts as off", not denied(res))
         res, _ = run(call("ExitPlanMode", {"plan": "x"}), os.path.join(td, "s_unarmed_plan"))
         check("un-armed ExitPlanMode must not block", not denied(res))
 
@@ -102,6 +115,8 @@ def main():
               armed_denies("hd_rel", "Bash", {"command": "tee thing.py <<EOF\nx\nEOF"}, td))
         check("heredoc into an existing file must not block",
               not armed_denies("hd_old", "Bash", {"command": "cat > already.py <<EOF\nx\nEOF"}, td))
+        check("'>' inside a heredoc body must not block",
+              not armed_denies("hd_body", "Bash", {"command": "git commit -F - <<'EOF'\nfix\n\nCo-Authored-By: X <x@y.com>\nEOF"}, td))
         check("plain redirect (no heredoc) must not block",
               not armed_denies("redir", "Bash", {"command": "echo x > %s 2>&1" % new_file}))
         check("new test file must not block",

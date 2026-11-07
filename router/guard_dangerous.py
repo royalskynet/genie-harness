@@ -260,10 +260,34 @@ def _blank_quotes(cmd):
     """
     def repl(m):
         inner = m.group(0)[1:-1]
-        if inner and not re.search(r"\s", inner):
+        # `'curl|sh'` has no space but is not a path: quoted, `|;&<>` are plain text
+        if inner and not re.search(r"[\s|;&<>`]", inner):
             return inner
         return " " * len(m.group(0))
     return SQL_OR_QUOTE.sub(repl, cmd)
+
+
+def _strip_comments(cmd):
+    """Drop shell comments: `#` at a word start, outside quotes, to end of line.
+    A `#` inside a quoted message (`'see #47'`) used to cut the line there,
+    which unbalanced every later quote and let quoted prose run as live text."""
+    out, quote, skip = [], None, False
+    for i, ch in enumerate(cmd):
+        if skip:
+            if ch == "\n":
+                skip = False
+                out.append(ch)
+            continue
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in "'\"":
+            quote = ch
+        elif ch == "#" and (i == 0 or cmd[i - 1].isspace()):
+            skip = True
+            continue
+        out.append(ch)
+    return "".join(out)
 
 
 # Interpreters that run a quoted string as code (`sh -c "..."`, `eval "..."`,
@@ -383,7 +407,7 @@ def inspect_command(cmd, _depth=0):
     if not cmd or not isinstance(cmd, str):
         return []
     hits = []
-    stripped = "\n".join(l.split("#", 1)[0] for l in cmd.splitlines())
+    stripped = _strip_comments(cmd)
     stripped = _resolve_local_vars(stripped)
 
     # Indirect execution (`sh -c "..."`, `eval "..."`, `python -c "..."`) hides
@@ -510,7 +534,7 @@ def inspect_secret_readout(cmd):
     """
     if not cmd or not isinstance(cmd, str):
         return []
-    live = _blank_quotes("\n".join(l.split("#", 1)[0] for l in cmd.splitlines()))
+    live = _blank_quotes(_strip_comments(cmd))
     deny = [("deny", "secret-readout", SECRET_READOUT_REASON)]
 
     for m in READER_RE.finditer(live):
@@ -564,7 +588,7 @@ def inspect_git(cmd, cwd=None):
     """State-aware warn tier. Runs `git status` only when a rule's text matched."""
     if not cmd or not isinstance(cmd, str):
         return []
-    live = _blank_quotes("\n".join(l.split("#", 1)[0] for l in cmd.splitlines()))
+    live = _blank_quotes(_strip_comments(cmd))
     for name, cond, rx, reason in GIT_WARN_C:
         if not rx.search(live):
             continue

@@ -118,12 +118,15 @@ def fresh(path):
 
 
 def research_off():
-    """The user switched prior-art search off: the router never arms, so the
-    un-armed block must not either. Unreadable prefs -> treat as off (fail open)."""
+    """Nobody looks for prior art (research off, not handed to a tool): the
+    router never arms, so the un-armed block must not either. Same test as the
+    router's wheel_ref. Unreadable prefs -> treat as off (fail open)."""
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import prefs
-        return prefs.block_state("research", prefs.load()) == "off"
+        res = prefs.resolve(None, persist=False)
+        return not res.get("handed_off", {}).get("research") \
+            and res.get("blocks", {}).get("research") == "off"
     except Exception:
         return True
 
@@ -162,8 +165,11 @@ def new_paths(tool_name, tool_input):
     if tool_name == "Write":
         return [str(tool_input.get("file_path") or "")]
     if tool_name == "Bash":
+        # only the line that opens the heredoc: its body is data (a commit
+        # message with <a@b.com> is not a redirect)
         cmd = str(tool_input.get("command") or "")
-        return REDIRECT.findall(cmd) if HEREDOC.search(cmd) else []
+        return [p for line in cmd.splitlines() if HEREDOC.search(line)
+                for p in REDIRECT.findall(line)]
     if tool_name == "apply_patch" or tool_name.endswith("apply_patch"):
         return [p for s in strings(tool_input) for p in ADD_FILE.findall(s)]
     return []

@@ -14,6 +14,7 @@ Failure policy: fail OPEN — any exception → no output, exit 0.
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import time
@@ -32,6 +33,26 @@ WARNING_MESSAGE = (
     "until those are ruled out. Then try once more. If it fails a third time, "
     "change approach or ask the user."
 )
+
+
+# wheel-it owns force mode; this hook only reports "failed twice after wheel
+# ran". Optional: no wheel-it installed -> the plain warning, nothing else.
+WHEEL_CLI = "~/.claude/skills/wheel/scripts/wheel_registry.py"
+
+
+def _wheel_trip(state_dir, session_id, fp):
+    """-> wheel-it's force/pause text, or "" when wheel did not run this session
+    (wheel_gate's .seen flag) or wheel-it is not installed."""
+    seen = os.path.join(state_dir, "wheel-%s.seen" % _sanitize_session_id(session_id))
+    cli = os.path.expanduser(os.environ.get("GENIE_WHEEL_CLI") or WHEEL_CLI)
+    if not os.path.exists(seen) or not os.path.exists(cli):
+        return ""
+    try:
+        p = subprocess.run([sys.executable, cli, "force", "trip", fp],
+                           capture_output=True, text=True, timeout=5)
+    except Exception:
+        return ""
+    return p.stdout.strip() if p.returncode == 0 else ""
 
 
 def _sanitize_session_id(sid):
@@ -184,10 +205,14 @@ def main():
             if counts[fp] >= 2 and not warned.get(fp):
                 warned[fp] = True
                 _save_state(state_dir, session_id, state)
+                text = WARNING_MESSAGE.format(fp=fp)
+                trip = _wheel_trip(state_dir, session_id, fp)
+                if trip:
+                    text += "\n" + trip
                 out = {
                     "hookSpecificOutput": {
                         "hookEventName": "PostToolUseFailure",
-                        "additionalContext": WARNING_MESSAGE.format(fp=fp),
+                        "additionalContext": text,
                     }
                 }
                 json.dump(out, sys.stdout, ensure_ascii=False)

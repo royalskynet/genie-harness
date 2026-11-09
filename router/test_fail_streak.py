@@ -58,8 +58,36 @@ def has_warning(output):
         return False
 
 
+def wheel_trip_cases(fails):
+    """Second failure after wheel ran -> wheel-it's trip text rides on the
+    warning; wheel not run or wheel-it missing -> plain warning only."""
+    with tempfile.TemporaryDirectory() as tmp:
+        cli = os.path.join(tmp, "fake_wheel.py")
+        with open(cli, "w") as fh:
+            fh.write("import sys\nprint('TRIPPED ' + ' '.join(sys.argv[1:]))\n")
+        env = {"GENIE_WHEEL_CLI": cli}
+        fail = lambda sid: run(make_payload("PostToolUseFailure", sid, "npm run build",
+                                            "Exit code 1\nboom"), env=env, state_dir=tmp)
+        fail("w1")
+        out = fail("w1").stdout
+        if not has_warning(out) or "TRIPPED" in out:
+            fails.append("FAIL W1: wheel not run this session -> plain warning, no trip")
+        open(os.path.join(tmp, "wheel-w2.seen"), "w").close()
+        fail("w2")
+        out = fail("w2").stdout
+        if not has_warning(out) or "TRIPPED force trip npm run" not in out:
+            fails.append("FAIL W2: wheel ran -> trip text appended: %r" % out)
+        env["GENIE_WHEEL_CLI"] = os.path.join(tmp, "missing.py")
+        open(os.path.join(tmp, "wheel-w3.seen"), "w").close()
+        fail("w3")
+        out = fail("w3").stdout
+        if not has_warning(out) or "TRIPPED" in out:
+            fails.append("FAIL W3: wheel-it missing -> plain warning only")
+
+
 def main():
     fails = []
+    wheel_trip_cases(fails)
 
     with tempfile.TemporaryDirectory() as tmp:
         # 1. Two consecutive failures → injection

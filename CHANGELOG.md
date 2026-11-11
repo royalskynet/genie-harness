@@ -2,6 +2,16 @@
 
 每一版改了什麼。最新的在最上面。 · What changed in each version, newest first.
 
+## 0.5.9 — 2026-11-11
+
+- 常駐載入瘦身：prefs 砍掉和 AGENTS.md 重複的三句（停手規則、research 提示、「使用者不會打指令」），開場那份從 1562 降到 1166 bytes；Claude Code 上單則訊息只動一個開關時不再重送整段常駐規則；定期重送從每 12 則改成每 24 則（`GENIE_PREFS_REFRESH=<N>` 照舊可調）。停手規則現在只在 AGENTS.md，原句獨有的兩個子句（猜錯要整個重來也先問、問題一次問完）一併搬過去。 · Slimmer standing context: prefs drops three lines AGENTS.md already says (the stop rule, the research hint, "they cannot type commands"), 1562 -> 1166 bytes at session start; on Claude Code a message that flips one block no longer re-sends the whole always-on line; the periodic refresh goes from every 12th to every 24th prompt (`GENIE_PREFS_REFRESH=<N>` still tunes it). The stop rule now lives only in AGENTS.md, with its two extra clauses moved there (#52, #53).
+- AGENTS.md：描述模糊時，動手前模型先自問三件事（專業詞、理論或研究、別的領域怎麼解），答案留在上下文當依據，不拿去問使用者。 · AGENTS.md: on a vague ask the model first asks itself three things (the term of art, the supporting theory or research, how other fields solve it) and keeps the answers in context; it does not ask the user (#51).
+- 輪子閘：Codex 也註冊；抓 `apply_patch` 新增檔與 heredoc 寫檔；整個 session 沒查過現成做法時擋第一個新檔（`GENIE_WHEEL_FIRST=0` 關閉）；heredoc 內文不再誤判成寫檔；research 交給 `wheel` 時認得是 Genie 的 wheel。 · Wheel gate: registered for Codex too; catches `apply_patch` new files and heredoc writes; blocks the first new file in a session that never looked up prior art (`GENIE_WHEEL_FIRST=0` = off); heredoc bodies are no longer read as writes; research handed to `wheel` is recognised as Genie's wheel (#45, #46).
+- 工單內的高風險動作：訊息本身已下令的照做，只在它沒講到的地方停；單行指令照舊等一聲好。 · A risky action inside a work order is carried out as ordered, stopping only on what the order does not cover; one-line risky orders still wait for a yes (#45).
+- overlap：`/wheel` 指令殼取代已連結的 wheel skill 時提醒。 · overlap flags a `/wheel` command shim standing in for the linked wheel skill (#47).
+- 災難指令閘：引號內的 `#` 不當註解，引號內的 `|;&<>` 當文字。 · Guard: `#` inside quotes is not a comment, and quoted `|;&<>` is text (#48).
+- fail_streak：wheel 發動過的 session 連續失敗兩次時呼叫 wheel-it 的 `force trip`。 · fail_streak calls wheel-it's `force trip` after two failures in a session where wheel ran (#50).
+
 ## 0.5.8 — 2026-11-06
 
 - numpy 改為選配：Codex 安裝沒有 numpy 時不再中止，只提醒；router 退回關鍵字比對，所有 hook 照常運作。 · numpy is now optional: the Codex installer warns instead of stopping, and the router falls back to keywords with every hook working.

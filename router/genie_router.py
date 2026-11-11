@@ -59,7 +59,7 @@ LONG_SESSION_THROTTLE_SEC = 30 * 60  # 30 minutes
 # Claude gets the static prefs only at SessionStart; in a long session the system
 # prompt, skills and tool output are English and the rules (language first) fade.
 # Re-send them every Nth prompt. 0 = off.
-PREFS_REFRESH_DEFAULT = 12
+PREFS_REFRESH_DEFAULT = 24
 
 
 def _prefs_refresh_due(data):

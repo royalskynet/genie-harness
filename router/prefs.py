@@ -101,12 +101,11 @@ BLOCKS = tuple(LEVEL_DEFAULTS["beginner"].keys())
 # When an `auto`/`on` block should fire. Only blocks that are not off are sent,
 # so an expert with terms/examples off pays for none of them; AGENTS.md used to
 # carry the whole table for every user. confirm/humanize are covered by AGENTS.md
-# (the four stop cases) and ALWAYS, so they have no hint.
+# (the four stop cases) and ALWAYS, research by AGENTS.md ("先想"), so they have no hint.
 BLOCK_HINT = {
     "terms": "terms: gloss a word only if asked or it will come up again, one per reply ($genie-terms)",
     "examples": "examples: one concrete example only when the abstract version does not land ($genie-explain)",
     "steps": "steps: show the path first for multi-step work ($genie-execute)",
-    "research": "research: answers that depend on version/time/price, or choosing a tool -> $wheel",
 }
 
 # Hard-wired knowledge for the model, not a preference. Deliberately not tunable:
@@ -118,11 +117,8 @@ BLOCK_HINT = {
 ALWAYS = (
     "answer in the user's language, notes between tool calls too (Traditional Chinese: "
     "Taiwan terms, 軟體/程式/網路)",
-    # The 4 stop cases stay spelled out. Shortening them to "irreversible, costly"
-    # reads as a narrower list and talks the model out of stopping before a publish.
-    "decide and proceed: pick one option and do it; ask only when it cannot be undone, "
-    "is seen by others, costs money or system settings, changes someone else's rules, "
-    "or a wrong guess wastes the whole job; batch all questions into one message",
+    # No decide-and-proceed line: the stop cases are spelled out in AGENTS.md, which
+    # reaches both hosts, and a second copy here was paid again on every refresh.
     "say plainly when you do not know",
     # ASD-STE100-style clarity, at every level and under any style tool: a misread
     # is a wrong action. Detail lives in genie-humanizer.
@@ -149,7 +145,6 @@ ALWAYS = (
     "translate meaning both ways: their words -> a checkable target (name your reading "
     "only if readings differ); your results -> what it means for them, never rosier, "
     "error text kept verbatim",
-    "they cannot type commands: run skills and commands yourself",
 )
 
 

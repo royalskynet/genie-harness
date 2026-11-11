@@ -251,18 +251,20 @@ def test_clarity_survives_level_and_style_handoff(fails):
         eq(rule in prefs.render_context(res), True, "clarity survives style handoff", fails)
 
 
-def test_decide_and_proceed_at_every_level(fails):
-    """The standing instruction is to pick an option and do it, and to stop only
-    for the irreversible or the redo-the-whole-result case. Not a preference: it
-    reaches every level and no block can mute it."""
+def test_decide_and_proceed_lives_in_agents_only(fails):
+    """The standing instruction is to do it without asking, and to stop only for
+    the four cases or the redo-the-whole-result case. AGENTS.md carries it for
+    both hosts; a second copy in prefs was paid again on every refresh."""
+    agents = open(os.path.join(os.path.dirname(HERE), "AGENTS.md"), encoding="utf-8").read()
+    for w in ("弄不回來的", "會被別人看到的", "要花錢或動系統設定", "別人寫的制度規則",
+              "直接做", "猜錯要整個重來", "問題一次問完"):
+        if w not in agents:
+            fails.append("AGENTS.md lost a stop-rule clause: %s" % w)
     for lvl in prefs.LEVELS:
         ctx = prefs.render_context(prefs.resolve("hi", data={"level": lvl}, persist=False))
-        if "decide and proceed" not in ctx:
-            fails.append("decide-and-proceed missing at %s" % lvl)
-        if "ask only when a wrong guess" in ctx:
-            fails.append("retired ask-only phrasing still injected at %s" % lvl)
-    if not any("decide and proceed" in a for a in prefs.ALWAYS):
-        fails.append("decide-and-proceed is not in ALWAYS (so it is tunable)")
+        for w in ("decide and proceed", "cannot be undone", "cannot type commands"):
+            if w in ctx:
+                fails.append("prefs repeats what AGENTS.md says at %s: %s" % (lvl, w))
 
 
 def test_translation_and_no_false_balance_at_every_level(fails):
@@ -285,14 +287,9 @@ def test_translation_and_no_false_balance_at_every_level(fails):
 
 
 def test_stop_cases_and_pinned_lang(fails):
-    """The per-turn stop rule names all 4 stop cases, not just 'irreversible': a
-    narrower list here would talk the model out of stopping before a publish.
-    A pinned language overrides follow-their-language, for users whose own rules
-    say 'always reply in X'."""
+    """A pinned language overrides follow-their-language, for users whose own
+    rules say 'always reply in X'."""
     ctx = prefs.render_context(prefs.resolve("Can you add a login page", data={}, persist=False))
-    for w in ("cannot be undone", "seen by others", "costs money", "someone else's rules"):
-        if w not in ctx:
-            fails.append("stop case missing from injection: %s" % w)
     eq("answer in the user's language" in ctx, True, "default follows their language", fails)
     ctx = prefs.render_context(prefs.resolve("Can you add a login page",
                                              data={"lang": "Traditional Chinese"}, persist=False))

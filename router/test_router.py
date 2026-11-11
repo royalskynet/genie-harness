@@ -407,6 +407,10 @@ def test_claude_static_once(fails):
     moved = prefs.resolve("just code 寫個函式", data=data, persist=False)
     if "blocks:" not in prefs.render_context(moved, "claude", "turn"):
         fails.append("claude turn: a turn override did not resend the dial")
+    if "always on:" in prefs.render_context(moved, "claude", "turn"):
+        fails.append("claude turn: a turn override resent the ALWAYS line no message can change")
+    if "always on:" not in prefs.render_context(moved, "claude", "turn", full=True):
+        fails.append("claude turn: the periodic refresh lost the ALWAYS line on an override turn")
     if "always on:" not in prefs.render_context(plain, "codex"):
         fails.append("codex: lost the per-turn static block (it has no SessionStart)")
 

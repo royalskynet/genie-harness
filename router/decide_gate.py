@@ -2,8 +2,8 @@
 """Genie Decide Gate — Claude Code `PreToolUse` hook on AskUserQuestion.
 
 AGENTS.md says only four kinds of thing are worth stopping for (irreversible,
-seen by others, costs money or system settings, changes someone else's rules),
-and prefs say "decide and proceed". Both were text the model could skip. This
+seen by others, costs money or system settings, changes someone else's rules)
+and to do the rest without asking. That was text the model could skip. This
 makes the cheap half of them a gate:
 
 * Reversible question where the model already marked exactly one option

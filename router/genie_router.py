@@ -789,8 +789,9 @@ def hook(raw, host="codex"):
             if ref:
                 lines.append(WHEEL_HINT % ref)
         # Claude gets the static prefs once from SessionStart; Codex has no such hook.
-        ctx = prefs.render_context(res, host, "turn" if host == "claude" else "all")
-        if host == "claude" and _prefs_refresh_due(data) and not ctx.startswith("[genie prefs]"):
+        due = host == "claude" and _prefs_refresh_due(data)
+        ctx = prefs.render_context(res, host, "turn" if host == "claude" else "all", full=due)
+        if due and not ctx.startswith("[genie prefs]"):
             ctx = "\n".join(c for c in (prefs.render_context(res, host, "static"), ctx) if c)
         if ctx:
             lines.append(ctx)

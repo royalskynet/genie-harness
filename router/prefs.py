@@ -495,11 +495,13 @@ ONBOARDING = (
     "on plain words run `%s set level <l>`. Then answer their message." % CLI)
 
 
-def render_context(res, host="codex", part="all"):
+def render_context(res, host="codex", part="all", full=False):
     """The prefs block. part="all": everything, every turn (Codex: no SessionStart).
     part="static": level/register/blocks/ALWAYS, sent once by Claude's SessionStart
     (re-runs after /compact and /clear). part="turn": only what this message
-    changed or raised; the static block rides along only when the state moved.
+    changed or raised; when the state moved the block rides along without the
+    ALWAYS line (part="dial"), which no message can change; full=True puts it back
+    for the periodic refresh.
     UserPromptSubmit context stays in the transcript, so a static block sent every
     turn piles up one copy per message."""
     if part == "turn":
@@ -508,7 +510,7 @@ def render_context(res, host="codex", part="all"):
             news.append(ONBOARDING)
         news += _notices(res)
         if res["changes"] or res["turn_overrides"]:
-            return render_context(res, host, "static") + ("\n" + "\n".join(news) if news else "") \
+            return render_context(res, host, "static" if full else "dial") + ("\n" + "\n".join(news) if news else "") \
                 + "\nchanged this message: " + ("; ".join(res["changes"]) or "turn-only override")
         return "\n".join(news)
     handed = res.get("handed_off", {})
@@ -529,6 +531,8 @@ def render_context(res, host="codex", part="all"):
              if res["blocks"][b] != "off" and not handed.get(b if b == "research" else "")]
     if hints:
         lines.append("when to add: " + "; ".join(hints))
+    if part == "dial":
+        return "\n".join(lines)
     always = list(ALWAYS)
     if res.get("lang"):
         always[0] = ("always answer in %s, whatever they write in, notes between tool calls too"

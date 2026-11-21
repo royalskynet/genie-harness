@@ -133,6 +133,7 @@ do_codex_genie() {
   [ -d "$CODEX_DIR/.git" ] || { codex_genie_install; return; }
   git -C "$CODEX_DIR" fetch -q origin main
   if [ "$(git -C "$CODEX_DIR" rev-parse HEAD)" = "$(git -C "$CODEX_DIR" rev-parse FETCH_HEAD)" ]; then
+    bash "$CODEX_DIR/install.sh"
     say "Genie (Codex) already latest"
   elif [ "$full" = 0 ] || ask "Genie (Codex) has an update. Update it?" y; then codex_genie_update
   else say "Genie (Codex) update skipped"; fi

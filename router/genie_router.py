@@ -185,6 +185,11 @@ SELF_UPDATE = re.compile(
     r"(?:更新|升級|升级|update|upgrade)\s*(?:一下\s*)?(?:the\s+)?(?:genie|精靈|精灵)"
     r"|(?:genie|精靈|精灵)\s*(?:要|可以)?\s*(?:更新|升級|升级|update|upgrade)\s*(?:到|to)?\s*"
     r"(?:最新|latest)", re.I)
+SELF_UPDATE_EXCLUDE = re.compile(
+    r"\b(?:not|never|don['’]t|how|why|when|where|whether)\b"
+    r"|\b(?:should|can|could|would)\s+i\b"
+    r"|不要|別|别|不想|不用|無需|无需|怎麼|怎么|如何|是否|要不要"
+    r"|^(?:更新|升級|升级)\s*(?:genie|精靈|精灵)\s*[嗎吗][?？]?$", re.I)
 
 
 def regex_tier(text):
@@ -194,7 +199,7 @@ def regex_tier(text):
     for kw in INTENTS["intents"]["risky_action"].get("keywords", []):
         if re.search(kw, low):
             return "risky_action", "regex:" + kw
-    if SELF_UPDATE.search(low):
+    if SELF_UPDATE.search(low) and not SELF_UPDATE_EXCLUDE.search(low):
         return "update_genie", "regex:self-update"
     for kw in INTENTS.get("wheel_sure", []):
         if re.search(kw, low):

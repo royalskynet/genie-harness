@@ -70,9 +70,30 @@ CASES = [
     ("更新 Genie", "update_genie"),
     ("幫我把 genie 升級到最新版", "update_genie"),
     ("update genie to latest", "update_genie"),
+    ("can you update genie?", "update_genie"),
+    ("could you update genie to latest?", "update_genie"),
+    ("可以幫我更新精靈嗎？", "update_genie"),
+    ("能不能幫我更新 genie", "update_genie"),
+    ("please update genie, no rush", "update_genie"),
     ("genie 更新後壞了", "fix_request"),
     ("幫我更新 README", "clear_request"),
 ]
+
+
+def test_self_update_exclusions(fails):
+    for text in (
+        "don't update Genie", "do not update genie", "不要更新精靈", "別更新 genie",
+        "how do I update genie?", "怎麼更新精靈？", "genie 要怎麼更新到最新",
+        "don't upgrade genie", "不要升級精靈", "如何更新精靈", "how to update genie",
+        "should I update genie", "更新精靈嗎", "", "   ",
+        "why update genie", "when should I update genie", "where do I update genie",
+        "whether to update genie", "怎么更新精灵", "是否更新精靈", "要不要更新精靈",
+    ):
+        got, score, why = r.classify(text)
+        ok = got != "update_genie"
+        print("%s %r -> %s" % ("OK " if ok else "BAD", text, got))
+        if not ok:
+            fails.append("self-update exclusion: %r -> %s" % (text, got))
 
 
 def run_cases(cases, fails, label):
@@ -830,6 +851,7 @@ def main():
         fails.append("route_ext: tests can see a live route_ext config (set GENIE_ROUTE_EXT=0)")
     test_dispatch(fails)
     test_update_genie_runs_the_real_command(fails)
+    test_self_update_exclusions(fails)
     test_options_are_not_padded(fails)
     test_local_tools_follow_level(fails)
     test_abstain_is_silent(fails)

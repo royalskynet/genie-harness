@@ -118,3 +118,44 @@ test('V2 setup: Genie Harness registers context and tool hooks', async () => {
   });
   assert.deepEqual(registered, ['session.context', 'tool.execute.before']);
 });
+
+// Stands in for Bun.spawn under node: echoes the routed prompt back as the router's context.
+const fakeBun = () => ({
+  spawn: ({ stdin }) => {
+    let input = '';
+    const reply = () => JSON.stringify({ hookSpecificOutput: { additionalContext: `routed: ${JSON.parse(input).prompt}` } });
+    const lazy = (text) => new ReadableStream({ pull(c) { c.enqueue(new TextEncoder().encode(text())); c.close(); } }, { highWaterMark: 0 });
+    return {
+      stdin: stdin === 'pipe' ? { write: (chunk) => { input += chunk; }, end: () => {} } : undefined,
+      stdout: lazy(reply),
+      stderr: lazy(() => ''),
+      exited: Promise.resolve(0),
+    };
+  },
+});
+
+test('V2 setup: context hook routes the 2.x { role, content } message shape', async () => {
+  let contextHook;
+  await genieHarness.setup({
+    location: { directory: process.cwd() },
+    session: { hook: async (name, callback) => { contextHook = callback; return { dispose: async () => {} }; } },
+    tool: { hook: async () => ({ dispose: async () => {} }) },
+  });
+  const realBun = globalThis.Bun;
+  globalThis.Bun = fakeBun();
+  try {
+    const event = {
+      sessionID: 'ses_v2_shape',
+      system: [],
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'old ask' }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'done' }] },
+        { role: 'user', content: [{ type: 'text', text: 'fix the login bug' }, { type: 'media', media: {} }] },
+      ],
+    };
+    await contextHook(event);
+    assert.deepEqual(event.system, [{ type: 'text', text: 'routed: fix the login bug' }]);
+  } finally {
+    globalThis.Bun = realBun;
+  }
+});

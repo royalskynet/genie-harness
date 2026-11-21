@@ -186,9 +186,10 @@ SELF_UPDATE = re.compile(
     r"|(?:genie|精靈|精灵)\s*(?:要|可以)?\s*(?:更新|升級|升级|update|upgrade)\s*(?:到|to)?\s*"
     r"(?:最新|latest)", re.I)
 SELF_UPDATE_EXCLUDE = re.compile(
-    r"\b(?:not|never|don['’]t|no|how|why|when|where|whether)\b"
+    r"\b(?:not|never|don['’]t|how|why|when|where|whether)\b"
     r"|\b(?:should|can|could|would)\s+i\b"
-    r"|不要|別|别|不想|不用|無需|无需|怎麼|怎么|如何|是否|要不要|能不能|[嗎吗?？]", re.I)
+    r"|不要|別|别|不想|不用|無需|无需|怎麼|怎么|如何|是否|要不要"
+    r"|^(?:更新|升級|升级)\s*(?:genie|精靈|精灵)\s*[嗎吗][?？]?$", re.I)
 
 
 def regex_tier(text):

@@ -70,6 +70,11 @@ CASES = [
     ("更新 Genie", "update_genie"),
     ("幫我把 genie 升級到最新版", "update_genie"),
     ("update genie to latest", "update_genie"),
+    ("can you update genie?", "update_genie"),
+    ("could you update genie to latest?", "update_genie"),
+    ("可以幫我更新精靈嗎？", "update_genie"),
+    ("能不能幫我更新 genie", "update_genie"),
+    ("please update genie, no rush", "update_genie"),
     ("genie 更新後壞了", "fix_request"),
     ("幫我更新 README", "clear_request"),
 ]
@@ -81,6 +86,8 @@ def test_self_update_exclusions(fails):
         "how do I update genie?", "怎麼更新精靈？", "genie 要怎麼更新到最新",
         "don't upgrade genie", "不要升級精靈", "如何更新精靈", "how to update genie",
         "should I update genie", "更新精靈嗎", "", "   ",
+        "why update genie", "when should I update genie", "where do I update genie",
+        "whether to update genie", "怎么更新精灵", "是否更新精靈", "要不要更新精靈",
     ):
         got, score, why = r.classify(text)
         ok = got != "update_genie"

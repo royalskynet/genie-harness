@@ -110,11 +110,14 @@ class InstallerTest(unittest.TestCase):
                                  script="get.sh", args=("codex",))
         self.assertNotEqual(first.returncode, 0, first.stdout)
         self.assertIn("JSONDecodeError", first.stdout)
+        marker = codex / ".genie-install-revision"
+        self.assertEqual(marker.read_text().strip(), "installing")
         hooks.write_text('{"hooks": {}}', encoding="utf-8")
         retry = self.run_install(source, home, codex, no_numpy=True,
                                  script="get.sh", args=("codex",))
         self.assertEqual(retry.returncode, 0, retry.stdout)
         self.assert_genie_hooks(codex)
+        self.assertEqual(marker.read_text().strip(), "same-commit")
 
     def test_get_latest_repairs_missing_hooks_and_rejects_broken_json(self):
         source, home, codex = self.prepare_get()
@@ -128,11 +131,59 @@ class InstallerTest(unittest.TestCase):
                                     script="get.sh", args=("codex",))
         self.assertEqual(repaired.returncode, 0, repaired.stdout)
         self.assert_genie_hooks(codex)
+        data = json.loads(hooks.read_text(encoding="utf-8"))
+        for entry in data["hooks"]["PreToolUse"]:
+            entry["hooks"] = [h for h in entry["hooks"] if "wheel_gate.py" not in h["command"]]
+        hooks.write_text(json.dumps(data), encoding="utf-8")
+        partial = self.run_install(source, home, codex, no_numpy=True,
+                                   script="get.sh", args=("codex",))
+        self.assertEqual(partial.returncode, 0, partial.stdout)
+        self.assert_genie_hooks(codex)
         hooks.write_text("{broken", encoding="utf-8")
         broken = self.run_install(source, home, codex, no_numpy=True,
                                   script="get.sh", args=("codex",))
         self.assertNotEqual(broken.returncode, 0, broken.stdout)
         self.assertNotIn("Genie (Codex) already latest", broken.stdout)
+
+    def test_get_healthy_latest_does_not_run_installer(self):
+        source, home, codex = self.prepare_get()
+        first = self.run_install(source, home, codex, no_numpy=True,
+                                 script="get.sh", args=("codex",))
+        self.assertEqual(first.returncode, 0, first.stdout)
+        self.assert_genie_hooks(codex)
+        (home / "genie-harness" / "install.sh").write_text(
+            "echo 'installer must not run'\nexit 99\n", encoding="utf-8")
+        retry = self.run_install(source, home, codex, no_numpy=True,
+                                 script="get.sh", args=("codex",))
+        self.assertEqual(retry.returncode, 0, retry.stdout)
+        self.assertIn("Genie (Codex) already latest", retry.stdout)
+        marker = codex / ".genie-install-revision"
+        marker.unlink()  # Legacy installs have hooks but no completion marker.
+        legacy = self.run_install(source, home, codex, no_numpy=True,
+                                  script="get.sh", args=("codex",))
+        self.assertEqual(legacy.returncode, 0, legacy.stdout)
+        self.assertIn("Genie (Codex) already latest", legacy.stdout)
+        marker.write_text("old-commit\n", encoding="utf-8")
+        stale = self.run_install(source, home, codex, no_numpy=True,
+                                 script="get.sh", args=("codex",))
+        self.assertEqual(stale.returncode, 99, stale.stdout)
+        self.assertNotIn("Genie (Codex) already latest", stale.stdout)
+
+    def test_get_retries_when_hooks_were_written_but_smoke_test_failed(self):
+        source, home, codex = self.prepare_get()
+        (source / "router" / "guard_dangerous.py").write_text("", encoding="utf-8")
+        first = self.run_install(source, home, codex, no_numpy=True,
+                                 script="get.sh", args=("codex",))
+        self.assertNotEqual(first.returncode, 0, first.stdout)
+        self.assertIn("guard smoke test: FAILED", first.stdout)
+        self.assert_genie_hooks(codex)
+        marker = codex / ".genie-install-revision"
+        self.assertEqual(marker.read_text().strip(), "installing")
+        (home / "genie-harness" / "router" / "guard_dangerous.py").unlink()
+        retry = self.run_install(source, home, codex, no_numpy=True,
+                                 script="get.sh", args=("codex",))
+        self.assertEqual(retry.returncode, 0, retry.stdout)
+        self.assertEqual(marker.read_text().strip(), "same-commit")
 
     def expected_hook(self, repo, matcher=None):
         command = " ".join((

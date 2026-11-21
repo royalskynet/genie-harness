@@ -129,11 +129,23 @@ codex_genie_update() {
   bash <(git -C "$CODEX_DIR" show FETCH_HEAD:update.sh) "$CODEX_DIR"
   say "Genie updated for Codex. Restart Codex to load it."
 }
+codex_genie_complete() {
+  local codex="${CODEX_HOME:-$HOME/.codex}"
+  if [ -f "$codex/.genie-install-revision" ]; then
+    [ "$(cat "$codex/.genie-install-revision")" = "$(git -C "$CODEX_DIR" rev-parse HEAD)" ] || return 1
+  fi
+  # Pre-marker installs count as complete only when every managed hook is present.
+  json_has "$codex/hooks.json" "all(
+    any(script in h.get('command', '')
+        for entry in d.get('hooks', {}).get(event, []) for h in entry.get('hooks', []))
+    for event, script in [('UserPromptSubmit', 'genie_router.py'),
+                          ('PreToolUse', 'guard_dangerous.py'), ('PreToolUse', 'wheel_gate.py')])" 2>/dev/null
+}
 do_codex_genie() {
   [ -d "$CODEX_DIR/.git" ] || { codex_genie_install; return; }
   git -C "$CODEX_DIR" fetch -q origin main
   if [ "$(git -C "$CODEX_DIR" rev-parse HEAD)" = "$(git -C "$CODEX_DIR" rev-parse FETCH_HEAD)" ]; then
-    bash "$CODEX_DIR/install.sh"
+    if ! codex_genie_complete; then bash "$CODEX_DIR/install.sh"; fi
     say "Genie (Codex) already latest"
   elif [ "$full" = 0 ] || ask "Genie (Codex) has an update. Update it?" y; then codex_genie_update
   else say "Genie (Codex) update skipped"; fi

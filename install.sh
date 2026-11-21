@@ -13,6 +13,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODEX="${CODEX_HOME:-$HOME/.codex}"
 SKILLS="$HOME/.agents/skills"
 MARK="<!-- genie-harness -->"
+mkdir -p "$CODEX"
+printf '%s\n' installing > "$CODEX/.genie-install-revision"
 
 if grep -qsF genie_router.py "$CODEX/hooks.json"; then
   echo "genie-harness already installed -> refreshing (update mode)"
@@ -299,3 +301,6 @@ for job, tools in sorted(found.items()):
 ' 2>/dev/null || true
 echo "done. first codex prompt: Genie introduces itself and asks your level."
 echo "done. try:  codex 'React 還是 Vue 比較好'"
+if [ -d "$HERE/.git" ]; then
+  git -C "$HERE" rev-parse HEAD > "$CODEX/.genie-install-revision"
+fi

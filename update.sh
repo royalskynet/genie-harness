@@ -13,6 +13,24 @@ if ! git -C "$HERE" merge -q --ff-only FETCH_HEAD 2>/dev/null; then
     echo "genie: $HERE has local edits, not updated. Commit or revert them, then re-run." >&2
     exit 1
   fi
+  upstream=()
+  while IFS= read -r -d '' path; do
+    upstream+=("$path")
+  done < <(git -C "$HERE" ls-tree -r --name-only -z FETCH_HEAD)
+  collisions=()
+  while IFS= read -r -d '' local_path; do
+    for path in "${upstream[@]}"; do
+      if [[ "$local_path" == "$path" || "$local_path" == "$path/"* || "$path" == "$local_path/"* ]]; then
+        collisions+=("$local_path")
+        break
+      fi
+    done
+  done < <(git -C "$HERE" ls-files --others -z)
+  if [ "${#collisions[@]}" -gt 0 ]; then
+    echo "genie: $HERE has untracked files that would be overwritten, not updated. Move or rename them, then re-run:" >&2
+    printf '  %s\n' "${collisions[@]}" >&2
+    exit 1
+  fi
   b="genie-before-update-$(date +%Y%m%d%H%M%S)"
   git -C "$HERE" branch -q "$b" HEAD
   git -C "$HERE" reset -q --hard FETCH_HEAD

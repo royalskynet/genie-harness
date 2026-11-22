@@ -21,12 +21,14 @@ async function runGenieScript(script, input, args = []) {
   return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode }
 }
 
+// 1.x messages are { info: { role }, parts }; 2.x are { role, content }.
 function lastUserText(messages) {
   if (!Array.isArray(messages)) return ""
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i]
-    if (message?.info?.role !== "user") continue
-    const text = (message.parts || [])
+    if ((message?.role ?? message?.info?.role) !== "user") continue
+    const parts = message.content ?? message.parts
+    const text = (Array.isArray(parts) ? parts : [])
       .filter((part) => part?.type === "text" && typeof part.text === "string" && !part.synthetic)
       .map((part) => part.text)
       .join("\n")

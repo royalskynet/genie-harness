@@ -36,9 +36,9 @@ Layer 2 找輪子與查證抽成獨立 `wheel` skill（三軸＋深度分級＋7
 
 ### 2026-10-18 v2.5.0 獨立成 ether-code
 
-- 與 `wheel` 曾在 `royalskynet/wheel-coding` 同住；該 repo 收斂為「只做 wheel」，本紀律獨立成新 repo `royalskynet/ether-code`。
+- 與 `wheel` 曾在 `royalskynet/wheel-it` 同住；該 repo 收斂為「只做 wheel」，本紀律獨立成新 repo `royalskynet/ether-code`。
 - `commands/dispatch.md` 移入 `skills/coding-hermes/references/dispatch.md`（`commands/dispatch.md` 保留同內容方便複製到 `~/.claude/commands/`），通用化外部 agent 名稱。
-- Layer 2 全文連結改指 wheel-coding。
+- Layer 2 全文連結改指 wheel-it。
 
 ### 2026-10-24 v2.6.0 repo 根目錄即技能
 

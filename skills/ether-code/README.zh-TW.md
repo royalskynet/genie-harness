@@ -51,7 +51,7 @@ repo 根目錄就是 `ether-code` 這個 skill：本體 `SKILL.md` 加六份按�
 
 ## 來源
 
-從 [royalskynet/coding-hermes](https://github.com/royalskynet/coding-hermes)（`NousResearch/hermes-agent` 的 fork）抽出，先在 wheel-coding 與 `wheel` 同住，2026-10-18 起獨立成本 repo。沿革見 [HISTORY.md](HISTORY.md)。
+從 [royalskynet/coding-hermes](https://github.com/royalskynet/coding-hermes)（`NousResearch/hermes-agent` 的 fork）抽出，先在 wheel-it 與 `wheel` 同住，2026-10-18 起獨立成本 repo。沿革見 [HISTORY.md](HISTORY.md)。
 
 ## License
 

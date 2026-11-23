@@ -51,7 +51,7 @@ By default, stop and record what you learned after three distinct approaches fai
 
 ## Origin
 
-Extracted from [royalskynet/coding-hermes](https://github.com/royalskynet/coding-hermes) (a fork of NousResearch/hermes-agent), lived next to `wheel` in wheel-coding, and became this repo on 2026-10-18. See [HISTORY.md](HISTORY.md).
+Extracted from [royalskynet/coding-hermes](https://github.com/royalskynet/coding-hermes) (a fork of NousResearch/hermes-agent), lived next to `wheel` in wheel-it, and became this repo on 2026-10-18. See [HISTORY.md](HISTORY.md).
 
 ## License
 

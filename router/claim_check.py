@@ -31,9 +31,11 @@ PATH_TOKEN_RE = re.compile(r"[\w.~+-]*[/][\w./+-]*")
 
 
 def extract(text):
-    """-> (shas, paths), each deduped in first-seen order."""
+    """-> (shas, paths), each deduped in first-seen order. URLs are stripped
+    first: a commit URL is evidence, not a claim."""
+    body = URL_RE.sub(" ", text)
     shas, seen_sha = [], set()
-    for m in SHA_RE.finditer(text):
+    for m in SHA_RE.finditer(body):
         tok = m.group(0)
         if not any(c.isdigit() for c in tok):
             continue  # all-letter hex word (deadbeef, facade): prose, not a sha
@@ -43,7 +45,7 @@ def extract(text):
             seen_sha.add(tok)
             shas.append(tok)
     paths, seen_path = [], set()
-    for m in PATH_TOKEN_RE.finditer(URL_RE.sub(" ", text)):
+    for m in PATH_TOKEN_RE.finditer(body):
         tok = m.group(0).strip("`'\"()[]{}<>,;:")
         if "://" in tok or tok.startswith(("www.", "ftp.")):
             continue  # URL, not a path claim

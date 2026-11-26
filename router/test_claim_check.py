@@ -64,10 +64,18 @@ def main():
         fails.append("FAIL 4: missing path not caught: rc=%d out=%s" % (rc, out[:120]))
 
     out, rc = run("per https://github.com/a/b/commit/1234abc9 and deadbeef", repo)
-    if "MISSING path" in out:
-        fails.append("FAIL 5: URL tail treated as a path claim: %s" % out[:160])
+    if rc != 0 or "MISSING" in out:
+        fails.append("FAIL 5: URL contents treated as claims: rc=%d out=%s"
+                     % (rc, out[:160]))
     if "deadbeef" in out:
         fails.append("FAIL 5b: digitless hex word treated as a sha claim")
+
+    out, rc = run("per https://github.com/a/b/commit/1234abc9, also bogus f00dbabe1", repo)
+    if rc != 1 or "MISSING sha f00dbabe1" not in out:
+        fails.append("FAIL 5c: non-URL sha must still be caught: rc=%d out=%s"
+                     % (rc, out[:160]))
+    if "1234abc9" in out:
+        fails.append("FAIL 5c: URL sha should not be extracted at all: %s" % out[:160])
 
     out, rc = run("no claims here, issue 1234567 is a number", repo)
     if rc != 0 or "nothing to verify" not in out:
@@ -84,7 +92,8 @@ def main():
             print("  " + f)
         sys.exit(1)
     print("PASS  all cases: real sha ok, invented sha caught, path checks, "
-          "URL ignored, digitless hex ignored, claim-free clean")
+          "URL ignored (exit 0, no MISSING), non-URL sha still caught, "
+          "digitless hex ignored, claim-free clean")
 
 
 if __name__ == "__main__":

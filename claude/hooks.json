@@ -50,6 +50,12 @@
         "hooks": [
           { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/fail_streak.py\"", "timeout": 5 }
         ]
+      },
+      {
+        "matcher": "Bash|Read|Grep|WebFetch|Task",
+        "hooks": [
+          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/router/big_output_gate.py\"", "timeout": 5 }
+        ]
       }
     ],
     "PostToolUseFailure": [

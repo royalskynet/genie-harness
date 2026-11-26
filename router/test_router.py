@@ -844,6 +844,16 @@ def test_hook_stdin_is_utf8(fails):
         fails.append("hook stdin not read as UTF-8: %r" % p.stdout[:80])
 
 
+def test_boundary_cases(fails):
+    """Pytest entry for the boundary table; main() calls run_cases directly."""
+    run_cases(CASES, fails, "boundary")
+
+
+def test_eval_set_accuracy(fails):
+    """Pytest entry for the dev-set scoring; main() calls run_eval_set directly."""
+    run_eval_set(fails)
+
+
 def main():
     fails = []
     # 10-18: 128 of 344 paid judge calls were these fixtures; the guard must fail loud.

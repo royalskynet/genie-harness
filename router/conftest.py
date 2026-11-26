@@ -18,3 +18,11 @@ def fails():
     if collected:
         pytest.fail("FAIL (%d):\n  %s" % (len(collected), "\n  ".join(collected)),
                     pytrace=False)
+
+
+@pytest.fixture
+def notes():
+    """Non-failing observations (test_repo.py's two-argument checks). The
+    script entry prints them; under pytest they are informational only, so
+    they are collected and dropped -- a note must never fail a run."""
+    return []

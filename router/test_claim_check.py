@@ -86,6 +86,23 @@ def main():
     if rc != 1:
         fails.append("FAIL 7: claims against an empty non-git dir must fail: rc=%d" % rc)
 
+    # Regression: a path ending a sentence carries the sentence's full stop.
+    # The stop must be stripped and the path verified, not skipped wholesale.
+    out, rc = run("see dir/f.txt.", repo)
+    if rc != 0 or "OK path dir/f.txt" not in out:
+        fails.append("FAIL 8: existing path at sentence end rejected: rc=%d out=%s"
+                     % (rc, out[:120]))
+
+    out, rc = run("fixed in dir/nope.py.", repo)
+    if rc != 1 or "MISSING path dir/nope.py" not in out:
+        fails.append("FAIL 9: missing path at sentence end not caught: rc=%d out=%s"
+                     % (rc, out[:120]))
+
+    out, rc = run("use pass/fail. and/or. done", repo)
+    if rc != 0 or "nothing to verify" not in out:
+        fails.append("FAIL 10: slash prose at sentence end misread as a claim: "
+                     "rc=%d out=%s" % (rc, out[:120]))
+
     if fails:
         print("FAIL (%d):" % len(fails))
         for f in fails:
@@ -94,6 +111,14 @@ def main():
     print("PASS  all cases: real sha ok, invented sha caught, path checks, "
           "URL ignored (exit 0, no MISSING), non-URL sha still caught, "
           "digitless hex ignored, claim-free clean")
+
+
+def test_script_harness():
+    """Pytest entry: run the whole script harness and fail if it does."""
+    p = subprocess.run([sys.executable, os.path.abspath(__file__)],
+                       capture_output=True, text=True, timeout=120)
+    assert p.returncode == 0, "script harness failed:\n%s%s" % (
+        p.stdout[-2000:], p.stderr[-2000:])
 
 
 if __name__ == "__main__":

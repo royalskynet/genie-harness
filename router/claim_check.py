@@ -49,10 +49,14 @@ def extract(text):
         tok = m.group(0).strip("`'\"()[]{}<>,;:")
         if "://" in tok or tok.startswith(("www.", "ftp.")):
             continue  # URL, not a path claim
+        # A trailing period is almost always the sentence's full stop, not
+        # part of the name: strip it (and trailing slashes) and verify what
+        # remains. Prose like "and/or." then fails the anchor/extension test
+        # below as before, but a real path ending a sentence still gets
+        # checked instead of being skipped unverified.
+        tok = tok.rstrip("/.")
         if not (tok.startswith(("/", "~/", "./", "../")) or "." in tok):
             continue  # bare a/b with no anchor or extension: not a path claim
-        if tok.rstrip("/").endswith("."):
-            continue
         if tok and tok not in seen_path:
             seen_path.add(tok)
             paths.append(tok)

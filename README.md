@@ -147,7 +147,7 @@ Genie 先在本地判斷你這句話是什麼意圖，再用一行 `DO:` 告訴�
 
 ### 調整
 
-- **分類不準**：在 `router/intents.json` 加關鍵字（零成本、最優先）或範例句，跑 `python3 router/test_router.py`。
+- **分類不準**：在 `router/intents.json` 加關鍵字（零成本、最優先）或範例句，跑 `python3 router/test_router.py`（或 `python3 -m pytest router/test_router.py -q`，同一批自檢）。
 - **看某句分到哪類**：`GENIE_DEBUG=1 python3 router/genie_router.py "你的句子"`。
 - **改設定**：`python3 router/prefs.py` 後用 `set level <l>`、`set <block> <state>`、`clear <block>`、`reset`。
 
@@ -426,7 +426,7 @@ The one exception: handing `guard` to another command guard that is actually ins
 
 ### Tuning
 
-- **Wrong classification**: add a keyword (free, highest priority) or example sentence in `router/intents.json`, then `python3 router/test_router.py`.
+- **Wrong classification**: add a keyword (free, highest priority) or example sentence in `router/intents.json`, then `python3 router/test_router.py` (or `python3 -m pytest router/test_router.py -q` — the same self-checks).
 - **See where a sentence lands**: `GENIE_DEBUG=1 python3 router/genie_router.py "your sentence"`.
 - **Change settings**: `python3 router/prefs.py`, then `set level <l>`, `set <block> <state>`, `clear <block>`, `reset`.
 

@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GATE = os.path.join(HERE, "big_output_gate.py")
@@ -24,6 +25,8 @@ def run(payload, env_extra=None):
     """-> (parsed stdout or None, exit code)."""
     env = dict(os.environ)
     env.pop("GENIE_BIG_OUTPUT_LINES", None)
+    env.pop("GENIE_BIG_OUTPUT_SHADOW", None)
+    env.pop("GENIE_BIG_OUTPUT_SHADOW_LOG", None)
     env.update(env_extra or {})
     raw = payload if isinstance(payload, str) else json.dumps(payload)
     p = subprocess.run([sys.executable, GATE], input=raw,
@@ -70,6 +73,24 @@ def main():
     if not warned(res):
         fails.append("FAIL 4: plain-string tool_response not measured")
 
+    with tempfile.TemporaryDirectory() as td:
+        logp = os.path.join(td, "shadow.jsonl")
+        res, rc = run(call("Bash", {"stdout": "shadow-secret\n" * 250}),
+                      {"GENIE_BIG_OUTPUT_SHADOW": "1",
+                       "GENIE_BIG_OUTPUT_SHADOW_LOG": logp})
+        if rc != 0 or res is not None:
+            fails.append("FAIL 4s: shadow mode must stay silent and exit 0")
+        else:
+            try:
+                rows = [json.loads(x) for x in open(logp, encoding="utf-8")]
+                if len(rows) != 1 or rows[0].get("lines") != 251 or rows[0].get("tool") != "Bash":
+                    fails.append("FAIL 4s: shadow log missing metadata row: %r" % rows)
+                rawlog = open(logp, encoding="utf-8").read()
+                if "shadow-secret" in rawlog or "tool_response" in rawlog or "tool_input" in rawlog:
+                    fails.append("FAIL 4s: shadow log leaked content/input")
+            except Exception as e:
+                fails.append("FAIL 4s: shadow log unreadable: %s" % e)
+
     res, rc = run("this is not json")
     if rc != 0 or res is not None:
         fails.append("FAIL 5: malformed stdin must fail open (silent, exit 0)")
@@ -94,7 +115,7 @@ def main():
             print("  " + f)
         sys.exit(1)
     print("PASS  all cases: warn over budget, silent under, env budget, "
-          "string response, fail-open, hook registered")
+          "string response, shadow metadata-only, fail-open, hook registered")
 
 
 if __name__ == "__main__":
